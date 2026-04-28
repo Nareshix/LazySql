@@ -455,6 +455,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 4. bulk insert
 5. begin immediate
+6. chrono/time/jiff or other datetime-based library support
+7. better egonomic for bulk operation? maybe.
+8. url crate?
+
 
 show how blob is used in READEME
 //TODO sqlite3_busy_timeout does return an int. It is nearly a gurantee for this
