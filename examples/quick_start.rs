@@ -9,8 +9,9 @@ struct AppDatabase {
     // or else you will get compile-time errors.
     // Alternatively, You could point to a .sql file or an existing db and skip the create table statements in the struct
 
-    // you don't have to import sql! macro. sqlitex brings with it
+    // you don't have to import sql! macro. #[sqlitex] brings with it
     init: sql!("
+    -- Note the NOT NULL constraints which allows us to use concrete types instead of Option<T>, (e.g., `i32` instead of `Option<i32>`)
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY NOT NULL,
             username TEXT NOT NULL,
@@ -18,8 +19,12 @@ struct AppDatabase {
         )
     "),
 
+    //`sql!` accept only a single SQL statement at a time.
+    // Chaining multiple queries with semicolons (;) is not supported
+    //and will result in `EOF error` during compile time.
+
     // postgres `::` type casting is supported. Alternatively u can use `CAST AS` syntax
-    add_user: sql!("INSERT INTO users (id, username, is_active) VALUES (?::REAL, ?, ?)"),
+    add_user: sql!("INSERT INTO users (id, username, is_active) VALUES (?::REAL, ?, ?);"),
 
     // or `id::REAL` instead of `CAST (id AS REAL)`
     get_active_users: sql!("SELECT CAST (id AS REAL), username, is_active as active FROM users WHERE is_active = ?"),
@@ -40,7 +45,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     db.add_user(0.0, "Alice", true)?;
     db.add_user(1.0, "Bob", false)?;
 
-    // active_users is an iterator
+    // active_users is an iterator.
+    // first() and all() methods are additionally provided.
     let active_users = db.get_active_users(true)?;
 
     for user in active_users {
