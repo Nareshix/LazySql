@@ -241,11 +241,7 @@ you will most likely **never** need to use this.
 
 For some context, sqlite does not expose any api for type inference and schema awareness validation. Hence, I had to build a custom sql parser and implement type inference and schema awareness myself in order to provide compile time guarantees.
 
-In theory, there might be some edge cases for **extremely complex sql queries** that I might have missed, meaning the sql query should work perfectly fine in runtime but the compile time checks fail.
-
-In practice however, most SQL queries are straightforward enough that one will **_almost never_** get close to hitting it.
-
-It is also important to calrify that there will **never** be a case when a sql query passes compile time check but fails at runtime. If it compiles, it works.
+In theory, there might be some edge cases for **extremely complex sql queries** that I might have missed, meaning the sql query should work perfectly fine in runtime but the compile time checks fail. In practice however, most SQL queries are straightforward enough that one will **_almost never_** get close to hitting it. It is also important to calrify that there will **never** be a case when a sql query passes compile time check but fails at runtime. If it compiles, it works.
 
 This might sound like a perfect candidate for sql runtime features. While you can perfectly use it for this use case, u will miss out on the compile time guarantees.
 Since the sql is correct but compiler fails to catch it, u can use `sql_escape_hatch!` to define the sql itself. The code would seem abit more verbose but u can still secure that compile time guarantees.
