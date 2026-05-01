@@ -9,6 +9,8 @@ struct AppDatabase {
     // or else you will get compile-time errors.
     // Alternatively, You could point to a .sql file or an existing db and skip the create table statements in the struct
 
+
+    // It is not recommended to use STRICT table. Read up more here: https://docs.rs/sqlitex/latest/sqlitex/#important-note-on-strict-tables
     // you don't have to import sql! macro. #[sqlitex] brings with it
     init: sql!("
     -- Note the `NOT NULL` constraints which allows us to use concrete types instead of Option<T>, (e.g., `i32` instead of `Option<i32>`)
@@ -17,7 +19,7 @@ struct AppDatabase {
             username TEXT NOT NULL,
             -- note that SQLite doesn't have a native boolean type.
             -- Creating table with `BOOLEAN` and `BOOL` data type aliases to `INTEGER CHECK (col IN (0, 1))`
-            -- you can read up more on here: https://docs.rs/sqlitex/latest/sqlitex/#a-note-on-strict-tables
+            -- which maps to bool datatype in rust
             is_active BOOL NOT NULL
         )
     "),
