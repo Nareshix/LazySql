@@ -169,6 +169,14 @@ fn expand(
 
     for field in fields.named.iter_mut() {
         let ident = field.ident.as_ref().unwrap();
+
+        if ident == "transaction" {
+            return Err(syn::Error::new(
+                ident.span(),
+                "`transaction` is a reserved keyword. Please rename this field to something else.",
+            ));
+        }
+
         let field_attrs = &field.attrs;
 
         // Check if type is sql!("...")
