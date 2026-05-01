@@ -1,9 +1,44 @@
 use std::collections::{HashMap, HashSet};
 
+use sqlparser::ast::{DataType, Expr, Visit, Visitor};
 use sqlparser::{ast::Statement, dialect::SQLiteDialect, parser::Parser};
+use std::ops::ControlFlow;
 
 use crate::table::{ColumnInfo, normalize_identifier};
 
+struct CastChecker {
+    error: Option<String>,
+}
+
+impl Visitor for CastChecker {
+    type Break = ();
+
+    fn pre_visit_expr(&mut self, expr: &Expr) -> ControlFlow<Self::Break> {
+        if let Expr::Cast { data_type, .. } = expr
+            && let DataType::Custom(name, _) = data_type
+        {
+            self.error = Some(format!("Unknown type casting: `{}`.", name));
+            return ControlFlow::Break(());
+        }
+        ControlFlow::Continue(())
+    }
+}
+
+pub fn validate_cast_types(sql: &str) -> Result<(), String> {
+    let dialect = SQLiteDialect {};
+    let Ok(statements) = Parser::parse_sql(&dialect, sql) else {
+        return Ok(());
+    };
+
+    let mut checker = CastChecker { error: None };
+    let _ = statements.visit(&mut checker);
+
+    if let Some(err) = checker.error {
+        return Err(err);
+    }
+
+    Ok(())
+}
 pub mod binding_patterns;
 pub mod expr;
 pub mod select_patterns;
