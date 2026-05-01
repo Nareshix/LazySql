@@ -10,8 +10,8 @@ use syn::{
 };
 use type_inference::{
     binding_patterns::get_type_of_binding_parameters, expr::BaseType, pg_cast_syntax_to_sqlite,
-    select_patterns::get_types_from_select, table::create_tables, validate_cast_types,
-    validate_insert_strict, validate_single_statement,
+    rewrite_bool_columns, select_patterns::get_types_from_select, table::create_tables,
+    validate_cast_types, validate_insert_strict, validate_single_statement,
 };
 
 /// This nicely formats the sql string.
@@ -182,6 +182,7 @@ fn expand(
         // Check if type is sql!("...")
         if let Some(sql_lit) = parse_sql_macro_type(&field.ty)? {
             let sql_query = pg_cast_syntax_to_sqlite(&sql_lit.value());
+            let sql_query = rewrite_bool_columns(&sql_query);
             validate_cast_types(&sql_query).map_err(|msg| syn::Error::new(sql_lit.span(), msg))?;
 
             if !validate_single_statement(&sql_query) {
@@ -555,6 +556,7 @@ fn expand(
         } else if let Some(runtime_input) = parse_runtime_macro(&field.ty)? {
             let sql_lit = runtime_input.sql;
             let sql_query = pg_cast_syntax_to_sqlite(&sql_lit.value());
+            let sql_query = rewrite_bool_columns(&sql_query);
 
             let transpiled_sql_lit = syn::LitStr::new(&sql_query, sql_lit.span());
 

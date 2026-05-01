@@ -1,10 +1,12 @@
 use std::collections::{HashMap, HashSet};
 
-use sqlparser::ast::{DataType, Expr, Visit, Visitor};
-use sqlparser::{ast::Statement, dialect::SQLiteDialect, parser::Parser};
+use sqlparser::ast::{
+    ColumnOption, ColumnOptionDef, CreateTable, DataType, Expr, Value, Visit, Visitor,
+};
+use sqlparser::{ast::Statement, dialect::GenericDialect, dialect::SQLiteDialect, parser::Parser};
 use std::ops::ControlFlow;
 
-use crate::table::{ColumnInfo, normalize_identifier};
+use crate::table::{ColumnInfo, normalize_identifier, normalize_part};
 
 struct CastChecker {
     error: Option<String>,
@@ -244,4 +246,43 @@ pub fn pg_cast_syntax_to_sqlite(sql: &str) -> String {
     }
 
     chars.into_iter().collect()
+}
+
+pub fn rewrite_bool_columns(sql: &str) -> String {
+    let dialect = GenericDialect {};
+
+    let Ok(mut ast) = Parser::parse_sql(&dialect, sql) else {
+        return sql.to_string();
+    };
+
+    for stmt in &mut ast {
+        if let Statement::CreateTable(create) = stmt {
+            for col in &mut create.columns {
+
+                let is_bool = matches!(&col.data_type, DataType::Boolean | DataType::Bool);
+                if is_bool {
+                    col.data_type = DataType::Integer(None);
+
+                    let check_expr = Expr::InList {
+                        expr: Box::new(Expr::Identifier(col.name.clone())),
+                        list: vec![
+                            Expr::Value(Value::Number("0".to_string(), false).into()),
+                            Expr::Value(Value::Number("1".to_string(), false).into()),
+                        ],
+                        negated: false,
+                    };
+
+                    col.options.push(ColumnOptionDef {
+                        name: None,
+                        option: ColumnOption::Check(check_expr),
+                    });
+                }
+            }
+        }
+    }
+
+    ast.iter()
+        .map(|s| s.to_string())
+        .collect::<Vec<String>>()
+        .join(";\n")
 }
