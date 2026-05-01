@@ -13,6 +13,7 @@ Sqlitex is a sqlite library for rust with compile time guarantees. It also has a
 - [Installation](#installation)
 - [Feature showcase](#feature-showcase)
 - [Quick Start](#quick-start)
+- [Additional Links](#additional-links)
 
 ## Installation
 
@@ -44,7 +45,6 @@ Hover over to see sql code
 
 
 ## Quick Start
-For more examples and features, look at the [examples](./examples/) folder and read the [documentations](https://docs.rs/sqlitex/latest/sqlitex/).
 ```rust
 use sqlitex::{Connection, sqlitex};
 
@@ -104,3 +104,5 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // prints out "0, Alice, true"
 }
 ```
+# Additional Links
+For more examples and features, look at the [examples](./examples/) folder and read the [documentations](https://docs.rs/sqlitex/latest/sqlitex/).
