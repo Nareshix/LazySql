@@ -448,9 +448,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 - This is a limitation of sqlite since it doesn't natively have `boolean` type. I may find some workaround in the future but it's not guaranteed. For now if you want to type cast as bool, u have to type cast it as an `integer` and add either 1 (`TRUE`) or 0 (`False`)
 
 ## TODOS
+1. rn blob loads everything to memory. add streaming support for blob
 
 2. check_constarint field in SELECT is ignored for now. maybe in future will make use of this field
-3. cant cast as bool
 
 4. bulk insert
 5. begin immediate
