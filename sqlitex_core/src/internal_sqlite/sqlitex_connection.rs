@@ -88,7 +88,7 @@ impl Connection {
         Ok(())
     }
 
-    pub fn query_dynamic(&self, sql: &str) -> Result<DynamicRows, SqliteFailure> {
+    pub fn query_runtime(&self, sql: &str) -> Result<DynamicRows, SqliteFailure> {
         let mut stmt = std::ptr::null_mut();
         unsafe {
             prepare_stmt(self.db, &mut stmt, sql).map_err(|e| match e {
@@ -109,7 +109,7 @@ impl Connection {
         }
     }
 
-    pub fn execute_dynamic(&self, sql: &str) -> Result<u64, SqliteFailure> {
+    pub fn execute_runtime(&self, sql: &str) -> Result<u64, SqliteFailure> {
         let mut stmt = std::ptr::null_mut();
 
         unsafe {

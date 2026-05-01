@@ -39,7 +39,6 @@
 cargo add sqlitex
 ```
 
-
 ## Quick Start
 
 ```rust
@@ -104,8 +103,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 - Since SQLite defaults to nullable columns, the type inference system defaults to Option<T>. To use concrete types (e.g., String instead of Option<String>), explicitly add **NOT NULL** to your table columns
 
-
-
   For instance,
 
   ![error_1](https://github.com/Nareshix/sqlitex/blob/main/amedia_for_readme/error_1.png?raw=true)
@@ -144,7 +141,6 @@ Point to an existing `.db` binary file. `sqlitex` inspects the live metadata to 
 struct App { ... }
 ```
 
-
 ## Features
 
 the `sqlitex!` macro brings `sql!` and `sql_escape_hatch!` macro. so there is no need to import them. and they can only be used within structs defined with `sqlitex!`
@@ -158,7 +154,8 @@ Note: Both `sql!` and `sql_escape_hatch!` accept only a single SQL statement at 
    2. **Generates Outputs:** For `SELECT` queries, creates a struct named after the field
 
 2. ### `sql_escape_hatch!` Macro
- #TODO
+
+   #TODO
    - Use this only when you need the sql to to be executed at runtime with some compile time guarantees. **Rarely needed in practice**. You would know when you need it.
 
    - Originally, `sql_escape_hatch!` is intended more of an escape hatch when you cant use the `sql!` macro due to false positives. False positives are **extremely extremely rare**. Look below for more info. This is why u still have to define structs for SELECT statements and specify types for binding parameters for non-SELECT statements
@@ -215,7 +212,6 @@ Note: Both `sql!` and `sql_escape_hatch!` accept only a single SQL statement at 
    ```
 
 3. ### Postgres `::` type casting syntax
-
 
    ```rust
    sql!("SELECT price::text FROM items")
@@ -298,21 +294,20 @@ Note: Both `sql!` and `sql_escape_hatch!` accept only a single SQL statement at 
 
 The tables covers the most common types which are used.
 
-| SQLite Type                  | Rust Type           |
-|-----------------------------|---------------------|
-| `TEXT`                      | `String` / `&str`   |
-| `INTEGER` / `INT`           | `i64`               |
+| SQLite Type                                         | Rust Type           |
+| --------------------------------------------------- | ------------------- |
+| `TEXT`                                              | `String` / `&str`   |
+| `INTEGER` / `INT`                                   | `i64`               |
 | `REAL` / `FLOAT` / `DOUBLE` / `NUMERIC` / `DECIMAL` | `f64`               |
-| `BOOLEAN` / `BOOL`          | `bool`              |
-| `BLOB`                      | `Vec<u8>` / `&[u8]` |
-| `NULL` (nullable columns)   | `Option<T>`         |
+| `BOOLEAN` / `BOOL`                                  | `bool`              |
+| `BLOB`                                              | `Vec<u8>` / `&[u8]` |
+| `NULL` (nullable columns)                           | `Option<T>`         |
 
 [All possible type affinities in sqlite is also covered](https://www.sqlite.org/datatype3.html#affinity_name_examples) but it's not recommended to use all of them other than the ones suggested in the table above. Boolean types would look diff in the link because sqlite doesn't natively have them and this library handles it gracefully for us.
 
 ## Dynamic runtime features
 
 - **Strongly** recommended to use the `sql!` macro for most use-cases. Dynamic runtime features are only needed in **rare** scenarios.
-
 
 ### Runtime Features
 
@@ -325,8 +320,8 @@ The tables covers the most common types which are used.
   fn main() -> Result<(), Box<dyn std::error::Error>> {
       let conn = Connection::open_memory()?;
 
-      // Use execute_dynamic for write statements (CREATE, INSERT, UPDATE, DELETE, etc.)
-      conn.execute_dynamic(
+      // Use execute_runtime for write statements (CREATE, INSERT, UPDATE, DELETE, etc.)
+      conn.execute_runtime(
           "CREATE TABLE products (
               id INTEGER PRIMARY KEY,
               name TEXT NOT NULL,
@@ -336,15 +331,15 @@ The tables covers the most common types which are used.
       )?;
 
       // _rows_affected variable is the number of rows modified, which in this case is an insert of 3 rows
-      let _rows_affected = conn.execute_dynamic(
+      let _rows_affected = conn.execute_runtime(
           "INSERT INTO products (name, price, in_stock) VALUES
           ('Laptop', 999.99, 1),
           ('Mouse', 25.50, 1),
           ('Keyboard', 75.00, 0)",
       )?;
 
-      // Use query_dynamic for running SELECT statements
-      let results = conn.query_dynamic("SELECT * FROM products")?;
+      // Use query_runtime for running SELECT statements
+      let results = conn.query_runtime("SELECT * FROM products")?;
       println!("Headers: {:?}", results.column_names); // id, name, price, in_stock
 
       // row_result is an iterator
@@ -357,7 +352,7 @@ The tables covers the most common types which are used.
 
       // u can use helper functions like first() or all() to get a vector of rows.
       let _first_row = conn
-          .query_dynamic("SELECT name, price FROM products WHERE id = 1")?
+          .query_runtime("SELECT name, price FROM products WHERE id = 1")?
           .first()?; // or .all()? for all rows
 
       Ok(())
@@ -373,15 +368,15 @@ use sqlitex::Connection;
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let conn = Connection::open_memory()?;
 
-    conn.execute_dynamic("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT UNIQUE)")?;
+    conn.execute_runtime("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT UNIQUE)")?;
 
     // Successful Transaction
     let user_count = conn.transaction(|tx| {
-        tx.execute_dynamic("INSERT INTO users (name) VALUES ('Alice')")?;
-        tx.execute_dynamic("INSERT INTO users (name) VALUES ('Bob')")?;
+        tx.execute_runtime("INSERT INTO users (name) VALUES ('Alice')")?;
+        tx.execute_runtime("INSERT INTO users (name) VALUES ('Bob')")?;
 
         let row = tx
-            .query_dynamic("SELECT COUNT(*) FROM users")?
+            .query_runtime("SELECT COUNT(*) FROM users")?
             .first()?
             .unwrap();
         Ok(row[0].as_i32()) // Return the count
@@ -392,8 +387,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 3. Failed Transaction (Automatic Rollback)
     // We try to add Charlie, then Alice again (who already exists).
     let result = conn.transaction(|tx| {
-        tx.execute_dynamic("INSERT INTO users (name) VALUES ('Charlie')")?; // Succeeds
-        tx.execute_dynamic("INSERT INTO users (name) VALUES ('Alice')")?; // Fails (UNIQUE constraint)
+        tx.execute_runtime("INSERT INTO users (name) VALUES ('Charlie')")?; // Succeeds
+        tx.execute_runtime("INSERT INTO users (name) VALUES ('Alice')")?; // Fails (UNIQUE constraint)
         Ok(())
     });
 
@@ -403,7 +398,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Charlie should NOT exist in the DB because the transaction reverted.
     let final_count = conn
-        .query_dynamic("SELECT COUNT(*) FROM users")?
+        .query_runtime("SELECT COUNT(*) FROM users")?
         .first()?
         .unwrap()[0]
         .as_i32();
@@ -423,28 +418,27 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ### - Valid SQL syntax or type inference fails at compile-time?
 
-
 - I tried my best to support as many sql and sqlite-specific queries as possible.
 
 - This isnt naturally easy in sqlite as they dont provide any api to give us type inference and schema awareness validation.
 
 - In the extremely rare case of a False positives (valid SQL syntax **fails** or type inference **incorrectly fails**), you can fall back to the `sql_escape_hatch!` macro. Would appreciate it if you could open an issue as well.
 
-
 ## TODOS
+
 1. rn blob loads everything to memory. add streaming support for blob
 
 2. check_constarint field in SELECT is ignored for now. maybe in future will make use of this field
-nutype/nnn support basic
-upsert, INSERT OR REPLACE INTO users (id, name) VALUES (?, ?)
+   nutype/nnn support basic
+   upsert, INSERT OR REPLACE INTO users (id, name) VALUES (?, ?)
 
-4. bulk insert
-5. begin immediate
-6. chrono/time/jiff or other datetime-based library support
-7. better egonomic for bulk operation? maybe.
-8. url crate?
-  1. it follows an opinionated API design
-  2. Doesn't support Batch Execution ergonomically. You would need to resort to `sql!()` or `sql_escape_hatch!()` macro
+3. bulk insert
+4. begin immediate
+5. chrono/time/jiff or other datetime-based library support
+6. better egonomic for bulk operation? maybe.
+7. url crate?
+8. it follows an opinionated API design
+9. Doesn't support Batch Execution ergonomically. You would need to resort to `sql!()` or `sql_escape_hatch!()` macro
 
 show how blob is used in READEME
 //TODO sqlite3_busy_timeout does return an int. It is nearly a gurantee for this
