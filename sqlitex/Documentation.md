@@ -51,10 +51,6 @@ struct AppDatabase {
         )
     "),
 
-    //`sql!` accept only a single SQL statement at a time.
-    // Chaining multiple queries with semicolons (;) is not supported
-    //and will result in `EOF error` during compile time.
-
     // postgres `::` type casting is supported. Alternatively u can use `CAST AS` syntax
     add_user: sql!("INSERT INTO users (id, username, is_active) VALUES (?::REAL, ?, ?);"),
 

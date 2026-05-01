@@ -25,7 +25,7 @@ cargo add sqlitex
 Hover over to see sql code
 
 
- 
+
     ![usage](https://github.com/Nareshix/sqlitex/raw/main/amedia_for_readme/usage.gif)
 
 (Note: `LazyConnection` has been renamed to `Connection` in newer version. library name was previously called LazySql which has now been renamed to Sqlitex)
@@ -36,9 +36,9 @@ Hover over to see sql code
 2. Compile time errors with good error messages
 
     ![error_1](https://github.com/Nareshix/sqlitex/blob/main/amedia_for_readme/error_1.png?raw=true)
-  
+
     ![error_2](https://github.com/Nareshix/sqlitex/blob/main/amedia_for_readme/error_2.png?raw=true)
-  
+
     ![error_3](https://github.com/Nareshix/sqlitex/blob/main/amedia_for_readme/error_3.png?raw=true)
 
 
@@ -66,10 +66,6 @@ struct AppDatabase {
             is_active BOOL NOT NULL
         )
     "),
-
-    //`sql!` accept only a single SQL statement at a time.
-    // Chaining multiple queries with semicolons (;) is not supported
-    //and will result in `EOF error` during compile time.
 
     // postgres `::` type casting is supported. Alternatively u can use `CAST AS` syntax
     add_user: sql!("INSERT INTO users (id, username, is_active) VALUES (?::REAL, ?, ?);"),
