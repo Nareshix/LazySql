@@ -13,13 +13,13 @@
   4. [Runtime Features](#runtime-features)
   5. [BLOB](#blob)
 
-- [Type Mapping](#type-mapping)
+- [A note on STRICT tables](#a-note-on-strict-tables)
 - [When to use `sql_escape_hatch!`](#when-to-use-sql_escape_hatch)
-    - [How to use `sql_escape_hatch!`](#how-to-use-sql_escape_hatch)
-         - [SELECT statements](#a-select-statements)
-         - [No Return Type](#b-no-return-type)
+  - [How to use `sql_escape_hatch!`](#how-to-use-sql_escape_hatch)
+    - [SELECT statements](#a-select-statements)
+    - [No Return Type](#b-no-return-type)
 - [Miscs](#miscs)
-    - [Strict INSERT Validation](#strict-insert-validation)
+  - [Strict INSERT Validation](#strict-insert-validation)
 
 ## Installation
 
@@ -28,7 +28,9 @@ cargo add sqlitex
 ```
 
 ## Quick Start
+
 For more examples and features, look at the [examples](./examples/) folder and read the [documentations](https://docs.rs/sqlitex/latest/sqlitex/).
+
 ```rust
 use sqlitex::{Connection, sqlitex};
 
@@ -134,36 +136,36 @@ Note: Both `sql!` and `sql_escape_hatch!` accept only a single SQL statement at 
    2. **Generates Outputs:** For `SELECT` queries, creates a struct named after the field
 
 2. ### `sql_escape_hatch!` Macro
-     You will almost never need to use this in practice. If you are curious on wht it does, read [on this section below](#when-to-use-sql_escape_hatch)
+   You will almost never need to use this in practice. If you are curious on wht it does, read [on this section below](#when-to-use-sql_escape_hatch)
 
- ## Postgres `::` type casting syntax
+## Postgres `::` type casting syntax
 
-   ```rust
-   sql!("SELECT price::text FROM items")
+```rust
+sql!("SELECT price::text FROM items")
 
-   // Compiles to:
-   // "SELECT CAST(price AS TEXT) FROM items"
-   ```
+// Compiles to:
+// "SELECT CAST(price AS TEXT) FROM items"
+```
 
-  ## `all()` and `first()` methods for iterators
-   - `all()` collects the iterator into a vector. Just a lightweight wrapper around .collect() to prevent adding type hints (Vec<\_>) in code
+## `all()` and `first()` methods for iterators
 
-     ```rust
-     let results = db.get_active_users(false)?;
-     let collected_results =results.all()?; // returns a Vec of owned  results from the returned rows
-     ```
+- `all()` collects the iterator into a vector. Just a lightweight wrapper around .collect() to prevent adding type hints (Vec<\_>) in code
 
-   - `first()` Returns the first row if available, or None if the query returned no results.
+  ```rust
+  let results = db.get_active_users(false)?;
+  let collected_results =results.all()?; // returns a Vec of owned  results from the returned rows
+  ```
 
-     ```rust
-     let results = db.get_active_users(false)?;
-     let first_result = results.first()?.unwrap(); // returns the first row from the returned rows
-     ```
+- `first()` Returns the first row if available, or None if the query returned no results.
 
-  ## Transactions
+  ```rust
+  let results = db.get_active_users(false)?;
+  let first_result = results.first()?.unwrap(); // returns the first row from the returned rows
+  ```
+
+## Transactions
 
 [Read this simple and short example on how to use transactions (at compile time)](https://github.com/Nareshix/sqlitex/blob/main/examples/transactions.rs)
-
 
 ## Runtime features
 
@@ -174,21 +176,60 @@ Note: Both `sql!` and `sql_escape_hatch!` accept only a single SQL statement at 
 [simple and short example for transaction feature at runtime ](https://github.com/Nareshix/sqlitex/blob/main/examples/transactions_runtime.rs)
 
 ## BLOB
+
 [simple and short example for BLOB](https://github.com/Nareshix/sqlitex/tree/main/examples/blob)
-## Type Mapping
 
-The tables covers the most common types which are used.
+## A note on STRICT tables
 
-| SQLite Type                                         | Rust Type           |
-| --------------------------------------------------- | ------------------- |
-| `TEXT`                                              | `String` / `&str`   |
-| `INTEGER` / `INT`                                   | `i64`               |
-| `REAL` / `FLOAT` / `DOUBLE` / `NUMERIC` / `DECIMAL` | `f64`               |
-| `BOOLEAN` / `BOOL`                                  | `bool`              |
-| `BLOB`                                              | `Vec<u8>` / `&[u8]` |
-| `NULL` (nullable columns)                           | `Option<T>`         |
+It is common advice to hear that we should create STRICT tables in sqlite. However, it is recommended not to use it with `sqlitex`
 
-[All possible type affinities in sqlite is also covered](https://www.sqlite.org/datatype3.html#affinity_name_examples) but it's not recommended to use all of them other than the ones suggested in the table above. Boolean types would look diff in the link because sqlite doesn't natively have them and this library handles it gracefully for us.
+when using `sqlitex`, it **automatically** uses its own built-in "STRICT" table, which is more flexible and much more powerful than sqlite's native STRICT tables. It mostly follows [sqlite type affinity](https://www.sqlite.org/datatype3.html#affinity_name_examples) except for how `BOOLEAN`/`BOOL` is handled. It is shown in the table below
+
+| SQLite Type without STRICT TABLE                                                                          | Rust Type           |
+| --------------------------------------------------------------------------------------------------------- | ------------------- |
+| `TEXT` / `CHARACTER` / `VARCHAR` / `CHARVARYING` / `CHARACTERVARYING` / `NVARCHAR` / `CLOB`             | `String` / `&str`   |
+| `INTEGER` / `INT` / `TINYINT` / `SMALLINT` / `MEDIUMINT` / `BIGINT` / `BIGINTUNSIGNED` / `INT2` / `INT8` | `i64`               |
+| `REAL` / `DOUBLE` / `DOUBLEPRECISION` / `FLOAT` / `NUMERIC` / `DECIMAL`                                  | `f64`               |
+| **`BOOLEAN`** / **`BOOL`**                                                                                        | `bool`              |
+| `BLOB` / `BYTEA`                                                                                          | `Vec<u8>` / `&[u8]` |
+
+
+| SQLite Type with STRICT TABLE | Rust Type           |
+| ----------------------------- | ------------------- |
+| `INTEGER` / `INT`             | `i64`               |
+| `REAL`                        | `f64`               |
+| `TEXT`                        | `String` / `&str`   |
+| `BLOB`                        | `Vec<u8>` / `&[u8]` |
+| `ANY`                         | `-`       |
+
+As we can see, `sqlitex` built-in "STRICT" table gives us more flexible types like FLOAT and DECIMAL and, more powerfully, a Boolean datatype
+
+This would also affect how casting works. Using the built in "STRICT" table for instance, allows casting with bool, but manually creating a STRICT table will make casting as bool impossible.
+
+
+### How to get boolean support for compile time checks without using `sqlitex`'s `bool` or `boolean` data type?
+
+If u prefer a sqlite-pure approach, make sure u add a check constraint for the column like either one of the following and sqlitex will automatically detect it as bool:
+ 1. CHECK (col IN (0, 1))
+ 2. CHECK (col = 0 OR col = 1)
+
+It does not matter whether the table is created with STRICT or not. You can still get compile time checks and boolean support as long as you have either of the check constraint.
+
+For isntance
+
+```rust
+#[lazy_sql]
+struct AppDatabase {
+    init: sql!("
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY NOT NULL,
+            username TEXT NOT NULL,
+            is_active INTEGER NOT NULL CHECK (is_active IN (0, 1)) -- the library infers this as bool.
+        )
+    "),
+    // ...
+}
+```
 
 ## When to use `sql_escape_hatch!`
 
@@ -198,70 +239,71 @@ For some context, sqlite does not expose any api for type inference and schema a
 
 In theory, there might be some edge cases for **extremely complex sql queries** that I might have missed, meaning the sql query should work perfectly fine in runtime but the compile time checks fail.
 
-In practice however, most SQL queries are straightforward enough that one will ***almost never*** get close to hitting it.
+In practice however, most SQL queries are straightforward enough that one will **_almost never_** get close to hitting it.
 
 It is also important to calrify that there will **never** be a case when a sql query passes compile time check but fails at runtime. If it compiles, it works.
 
 This might sound like a perfect candidate for sql runtime features. While you can perfectly use it for this use case, u will miss out on the compile time guarantees.
-Since the sql is correct but compiler fails to catch it, u can use `sql_escape_hatch!` to define the sql  itself. The code would seem abit more verbose but u can still secure that compile time guarantees.
+Since the sql is correct but compiler fails to catch it, u can use `sql_escape_hatch!` to define the sql itself. The code would seem abit more verbose but u can still secure that compile time guarantees.
 
-If you do somehow encounter this *false positive*, I would really appreicate it if you could open an issue on the [github repo](https://github.com/nareshix/sqlitex/issues).
+If you do somehow encounter this _false positive_, I would really appreicate it if you could open an issue on the [github repo](https://github.com/nareshix/sqlitex/issues).
 
 ### How to use `sql_escape_hatch!`
 
-   #### a. `SELECT` statements
+#### a. `SELECT` statements
 
-   You can map a query result to any struct by deriving `SqlMapping`.
+You can map a query result to any struct by deriving `SqlMapping`.
 
-   `SqlMapping` maps columns by **index**, not by name. The order of fields in your struct **must** match the order of columns in your `SELECT` statement exactly.
+`SqlMapping` maps columns by **index**, not by name. The order of fields in your struct **must** match the order of columns in your `SELECT` statement exactly.
 
-   ```rust
-   use sqlitex::{SqlMapping, Connection, sqlitex};
+```rust
+use sqlitex::{SqlMapping, Connection, sqlitex};
 
-   #[derive(Debug, SqlMapping)]
-   pub struct UserStats { // must be pub
-       total: i64,      // Maps to column index 0
-       status: String,  // Maps to column index 1
-   }
+#[derive(Debug, SqlMapping)]
+pub struct UserStats { // must be pub
+    total: i64,      // Maps to column index 0
+    status: String,  // Maps to column index 1
+}
 
-   #[sqlitex]
-   struct Analytics {
-       get_stats: sql_escape_hatch!(
-           UserStats, // pass in the struct so you can access the fields later
-           "SELECT count(*) as total, status
-           FROM users
-           WHERE id > ? AND login_count >= ?
-           GROUP BY status",
-           i64, // Maps to 1st '?'
-           i64  // Maps to 2nd '?'
-       )
-   }
+#[sqlitex]
+struct Analytics {
+    get_stats: sql_escape_hatch!(
+        UserStats, // pass in the struct so you can access the fields later
+        "SELECT count(*) as total, status
+        FROM users
+        WHERE id > ? AND login_count >= ?
+        GROUP BY status",
+        i64, // Maps to 1st '?'
+        i64  // Maps to 2nd '?'
+    )
+}
 
-   fn foo{
-       let conn = Connection::open_memory()?;
-       let mut db = Analytics::new(conn);
+fn foo{
+    let conn = Connection::open_memory()?;
+    let mut db = Analytics::new(conn);
 
-       let foo = db.get_stats(100, 5)?;
-       for i in foo{
-           // i.total and i.status is accessible
-       }
-   }
-   ```
+    let foo = db.get_stats(100, 5)?;
+    for i in foo{
+        // i.total and i.status is accessible
+    }
+}
+```
 
-   #### b. No Return Type
+#### b. No Return Type
 
-   For `INSERT`, `UPDATE`, or `DELETE` statements
+For `INSERT`, `UPDATE`, or `DELETE` statements
 
-   ```rust
-   #[sqlitex]
-   struct Logger {
-       log: sql_escape_hatch!("INSERT INTO logs (msg, level) VALUES (?, ?)", String, i64)
-   }
-   // can continue to use it normally.
-   ```
+```rust
+#[sqlitex]
+struct Logger {
+    log: sql_escape_hatch!("INSERT INTO logs (msg, level) VALUES (?, ?)", String, i64)
+}
+// can continue to use it normally.
+```
 
 ## Miscs
 
 ### Strict INSERT Validation
 
 - Although standard SQL allows inserting any number of columns to a table, sqlitex checks INSERT statements at compile time. If you omit any column (except for `AUTOINCREMENT` and `DEFAULT`), code will fail to compile. This means you must either specify all columns explicitly, or use implicit insertion for all columns. This is done to prevent certain runtime errors such as `NOT NULL constraint failed` and more.
+
