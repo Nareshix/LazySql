@@ -13,7 +13,7 @@
   4. [Runtime Features](#runtime-features)
   5. [BLOB](#blob)
 
-- [A note on STRICT tables](#a-note-on-strict-tables)
+- [Important note on STRICT tables](#important-note-on-strict-tables)
 - [When to use `sql_escape_hatch!`](#when-to-use-sql_escape_hatch)
   - [How to use `sql_escape_hatch!`](#how-to-use-sql_escape_hatch)
     - [SELECT statements](#a-select-statements)
@@ -45,10 +45,13 @@ struct AppDatabase {
 
     // you don't have to import sql! macro. #[sqlitex] brings with it
     init: sql!("
-    -- Note the NOT NULL constraints which allows us to use concrete types instead of Option<T>, (e.g., `i32` instead of `Option<i32>`)
+    -- Note the `NOT NULL` constraints which allows us to use concrete types instead of Option<T>, (e.g., `i32` instead of `Option<i32>`)
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY NOT NULL,
             username TEXT NOT NULL,
+            -- note that SQLite doesn't have a native boolean type.
+            -- Creating table with `BOOLEAN` and `BOOL` data type aliases to `INTEGER CHECK (col IN (0, 1))`
+            -- you can read up more on here: https://docs.rs/sqlitex/latest/sqlitex/#a-note-on-strict-tables
             is_active BOOL NOT NULL
         )
     "),
@@ -179,7 +182,7 @@ sql!("SELECT price::text FROM items")
 
 [simple and short example for BLOB](https://github.com/Nareshix/sqlitex/tree/main/examples/blob)
 
-## A note on STRICT tables
+## Important note on STRICT tables
 
 It is common advice to hear that we should create STRICT tables in sqlite. However, it is recommended not to use it with `sqlitex`
 
@@ -206,6 +209,7 @@ As we can see, `sqlitex` built-in "STRICT" table gives us more flexible types li
 
 This would also affect how casting works. Using the built in "STRICT" table for instance, allows casting with bool, but manually creating a STRICT table will make casting as bool impossible.
 
+Internally, creating table with `BOOLEAN` and `BOOL` data type aliases to `INTEGER CHECK (col IN (0, 1))`
 
 ### How to get boolean support for compile time checks without using `sqlitex`'s `bool` or `boolean` data type?
 

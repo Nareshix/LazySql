@@ -11,10 +11,13 @@ struct AppDatabase {
 
     // you don't have to import sql! macro. #[sqlitex] brings with it
     init: sql!("
-    -- Note the NOT NULL constraints which allows us to use concrete types instead of Option<T>, (e.g., `i32` instead of `Option<i32>`)
+    -- Note the `NOT NULL` constraints which allows us to use concrete types instead of Option<T>, (e.g., `i32` instead of `Option<i32>`)
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY NOT NULL,
             username TEXT NOT NULL,
+            -- note that SQLite doesn't have a native boolean type.
+            -- Creating table with `BOOLEAN` and `BOOL` data type aliases to `INTEGER CHECK (col IN (0, 1))`
+            -- you can read up more on here: https://docs.rs/sqlitex/latest/sqlitex/#a-note-on-strict-tables
             is_active BOOL NOT NULL
         )
     "),

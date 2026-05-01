@@ -13,7 +13,7 @@ Sqlitex is a sqlite library for rust with compile time guarantees. It also has a
 - [Installation](#installation)
 - [Feature showcase](#feature-showcase)
 - [Quick Start](#quick-start)
-- [A note on STRICT tables](#a-note-on-strict-tables)
+- [Important note on STRICT tables](#important-note-on-strict-tables)
 - [Additional Links](#additional-links)
 
 ## Installation
@@ -60,10 +60,13 @@ struct AppDatabase {
 
     // you don't have to import sql! macro. #[sqlitex] brings with it
     init: sql!("
-    -- Note the NOT NULL constraints which allows us to use concrete types instead of Option<T>, (e.g., `i32` instead of `Option<i32>`)
+    -- Note the `NOT NULL` constraints which allows us to use concrete types instead of Option<T>, (e.g., `i32` instead of `Option<i32>`)
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY NOT NULL,
             username TEXT NOT NULL,
+            -- note that SQLite doesn't have a native boolean type.
+            -- Creating table with `BOOLEAN` and `BOOL` data type aliases to `INTEGER CHECK (col IN (0, 1))`
+            -- you can read up more on here: https://docs.rs/sqlitex/latest/sqlitex/#a-note-on-strict-tables
             is_active BOOL NOT NULL
         )
     "),
@@ -105,7 +108,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // prints out "0, Alice, true"
 }
 ```
-# A note on STRICT tables
+# Important note on STRICT tables
 It is common advice to hear that we should create STRICT tables in sqlite. However, it is recommended not to use it with `sqlitex`
 
 creating STRICT tables in sqlite will make this library less powerful. STRICT table only allows `INT`, `INTEGER`, `REAL`, `TEXT`, `BLOB`, `ANY` datatypes.
