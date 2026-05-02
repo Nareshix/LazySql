@@ -4,6 +4,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let conn = Connection::open_memory()?;
 
     // Use execute_runtime for write statements (CREATE, INSERT, UPDATE, DELETE, etc.)
+    // Chaining of multiple sql queries via `;` are not allowed
     conn.execute_runtime(
         "CREATE TABLE products (
             id INTEGER PRIMARY KEY,
@@ -22,6 +23,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     )?;
 
     // Use query_runtime for running SELECT statements
+    // Chaining of multiple sql queries via `;` are not allowed
     let results = conn.query_runtime("SELECT * FROM products")?;
     println!("Headers: {:?}", results.column_names); // id, name, price, in_stock
 

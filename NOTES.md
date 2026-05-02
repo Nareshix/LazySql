@@ -1,4 +1,3 @@
-## TODOS
 
 # Some notes
 
@@ -30,13 +29,17 @@ To allow CREATE TABLE stmts anywhere within the macro, we can scan all the creat
 # Feature addition (subjected to confirmation)
 
 1. bulk insert
-2. begin immediate
+db.transaction(|tx| {
+    for item in &items {
+        tx.add_user(item.id, &item.username, item.is_active)?;
+    }
+    Ok(())
+})?;
+fsync so its still bulk depsite transaction
+maybe generate a _bulk method (simlar to python executemany) for write operations. but it can pollute the ide autosuggestions fast. think about runtime wise
+2. begin immediate (https://sqlite.org/forum/forumpost/04ed1d235b)
 3. chrono/time/jiff or other datetime-based library support
-4. better egonomic for bulk operation? maybe.
-5. url crate?
-10. it follows an opinionated API design
-11. Doesn't support Batch Execution ergonomically. You would need to resort to `sql!()` or `sql_escape_hatch!()` macro
-
+4. quickstart too legnthy. remove comments in readme but keep in examples
 
 # internal code improvement concerns
 sqlitex_type_inference crate needs some refactoring as the codebase is q messy
@@ -58,4 +61,3 @@ sqlite optimize
 VACCUm
 https://www.sqlite.org/optoverview.html
 https://sqlite.org/lang_vacuum.html
-
