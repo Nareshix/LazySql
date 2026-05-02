@@ -5,7 +5,7 @@ headers of
 
 `Added`, `Migration`, `Changed`, `Deprecated`, `Removed`, `Fixed`, `Security`.
 
-## Ongoing
+## [0.2.2] - 2026-05-03
 The default PRAGMA settings when using the library are
 
 ```sql
@@ -16,9 +16,7 @@ PRAGMA synchronous = NORMAL;
 ```
 This gives best performance and high relibaility
 
-fts5 support (ongoing)
-
-## [0.2.1] - 2026-06-01
+## [0.2.1] - 2026-05-02
 Documentation formatting
 
 ## [0.2.0] - 2026-05-02
