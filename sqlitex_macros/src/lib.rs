@@ -8,7 +8,7 @@ use sqlitex_type_inference::{
     binding_patterns::get_type_of_binding_parameters, expr::BaseType, pg_cast_syntax_to_sqlite,
     rewrite_bool_columns, select_patterns::get_types_from_select, table::create_tables,
     validate_cast_types, validate_create_table_types, validate_insert_strict,
-    validate_single_statement,
+    validate_no_virtual_tables, validate_single_statement,
 };
 use syn::{
     Data, DeriveInput, Fields, Ident, ItemStruct, LitStr, Type, parse_macro_input, parse_quote,
@@ -196,6 +196,8 @@ fn expand(
         if let Some(sql_lit) = parse_sql_macro_type(&field.ty)? {
             let sql_query = pg_cast_syntax_to_sqlite(&sql_lit.value());
             let sql_query = rewrite_bool_columns(&sql_query);
+            validate_no_virtual_tables(&sql_query)
+                .map_err(|msg| syn::Error::new(sql_lit.span(), msg))?;
             validate_cast_types(&sql_query).map_err(|msg| syn::Error::new(sql_lit.span(), msg))?;
 
             validate_create_table_types(&sql_query)

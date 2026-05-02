@@ -5,7 +5,16 @@ headers of
 
 `Added`, `Migration`, `Changed`, `Deprecated`, `Removed`, `Fixed`, `Security`.
 
+## ongoing - 2026-05-03
+
+### Added
+compile time checks for virtual tables are not supported. Added this specific error for better clarity.
+
+
 ## [0.2.2] - 2026-05-03
+
+### Changed
+
 The default PRAGMA settings when using the library are
 
 ```sql

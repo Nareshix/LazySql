@@ -63,19 +63,29 @@ pub fn validate_create_table_types(sql: &str) -> Result<(), String> {
     }
     Ok(())
 }
+pub fn validate_no_virtual_tables(sql: &str) -> Result<(), String> {
+    let Ok(statements) = Parser::parse_sql(&SQLiteDialect {}, sql) else {
+        return Ok(());
+    };
 
+    for statement in statements {
+        if let Statement::CreateVirtualTable { .. } = statement {
+            return Err("Creation of Virtual tables are not support at compile time. Resort to runtime features instead.".to_string());
+        }
+    }
+
+    Ok(())
+}
 pub fn validate_single_statement(sql: &str) -> Result<(), String> {
     let dialect = SQLiteDialect {};
     if let Ok(ast) = Parser::parse_sql(&dialect, sql)
         && ast.len() > 1
     {
         return Err(
-            "Multiple SQL statements detected. Split them into separate sql!() macros."
-                .to_string(),
-        )
+            "Multiple SQL statements detected. Split them into separate sql!() macros.".to_string(),
+        );
     }
     Ok(())
-
 }
 pub fn validate_insert_strict(
     sql: &str,
