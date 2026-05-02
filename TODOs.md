@@ -2,14 +2,19 @@
 
 auto enable wal and toher common recommendations? otehr than strict table
 
-1. likewise for hover over funciton, need to test whether it works on other editors
+
+To allow CREATE TABLE stmts anywhere within the macro, we can scan all the create tables first and add it to memory. I did that originally but there is an issue. When we make a mistake in CREATE TABLE, and that stmt is somewhere in between multiple sql!() macros, the error wouldnt highlight the CREATE TABLE stmt, but isntead highlight the lines before it saying things like table do not exist. THis is extremley misleading and confusing, so for now just leave things as is until u come back to it later. U did document this in the quick_start and documentation so its good enough
 
 
-if nutype is supported, certain features like casting from int to bool is possible as we can define the constaraint to be in eitehr 0 or 1
+
+1. for hover over funciton, need to test whether it works on other editors. works great on vscode
+
+
+2. nutype support? but complex . realistically might not ever implement it but just leave it here as a food for thought.
 
 3. rn blob loads everything to memory. maybe add streaming support for blob?
 
-4. check_constraint field in SELECT is ignored for now. maybe in future will make use of this field via nutype/nnn
+4. check_constraint field in SELECT is ignored for now.
 
 upsert - INSERT OR REPLACE INTO users (id, name) VALUES (?, ?)
 
@@ -25,9 +30,7 @@ upsert - INSERT OR REPLACE INTO users (id, name) VALUES (?, ?)
 // function to never fail. but its still good to handle it. If it fails mean
 // the sql query is taking more than 5 second which means its inefficent lol
 hence give eoption to change the timeout
-make the readme shorter
 
-in case CREATE TABLE is done after a random query in sql_struct should i allow it? like scan whole struct first instead of top down? at least show a warning
 
 sqlitex_type_inference crate needs some refactoring as the codebase is q messy
 add contributing.md cuz u seem to forget wht u write lol then spenda lot of time looking though code to rmb wht u did. gonna make same mistake again rn :p
