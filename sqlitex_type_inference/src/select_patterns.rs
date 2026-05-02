@@ -125,7 +125,6 @@ fn process_returning_clause(
                 output_columns.push(ColumnInfo {
                     name: normalize_identifier(alias),
                     data_type: t,
-                    check_constraint: None,
                     has_default: false,
                 });
             }
@@ -146,7 +145,6 @@ fn process_returning_clause(
                 output_columns.push(ColumnInfo {
                     name,
                     data_type: t,
-                    check_constraint: None,
                     has_default: false,
                 });
             }
@@ -252,7 +250,6 @@ pub fn traverse_select_output(
                         output_columns.push(ColumnInfo {
                             name: normalize_identifier(alias),
                             data_type: t,
-                            check_constraint: None,
                             has_default: false,
                         });
                     }
@@ -274,7 +271,6 @@ pub fn traverse_select_output(
                         output_columns.push(ColumnInfo {
                             name,
                             data_type: t,
-                            check_constraint: None,
                             has_default: false,
                         });
                     }
@@ -353,7 +349,6 @@ pub fn traverse_select_output(
                 final_cols.push(ColumnInfo {
                     name: format!("col_{}", i),
                     data_type: t,
-                    check_constraint: None,
                     has_default: false,
                 });
             }

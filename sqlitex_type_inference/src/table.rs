@@ -13,7 +13,6 @@ use crate::expr::{BaseType, Type};
 pub struct ColumnInfo {
     pub name: String,
     pub data_type: Type,
-    pub check_constraint: Option<String>,
     pub has_default: bool,
 }
 
@@ -143,7 +142,6 @@ pub fn create_tables(sql: &str, tables: &mut HashMap<String, Vec<ColumnInfo>>) {
             let table_columns = columns
                 .iter()
                 .map(|col| {
-                    let mut check_expr_str = None;
                     let mut nullable = true;
                     let mut is_detected_boolean = false;
                     let mut is_default = false;
@@ -154,13 +152,11 @@ pub fn create_tables(sql: &str, tables: &mut HashMap<String, Vec<ColumnInfo>>) {
 
                     for option_def in &col.options {
                         match &option_def.option {
-                            ColumnOption::Check(expr) => {
-                                check_expr_str = Some(expr.to_string());
+                            ColumnOption::Check(expr)
 
-                                if is_boolean_constraint(expr) {
+                                if is_boolean_constraint(expr) => {
                                     is_detected_boolean = true;
                                 }
-                            }
                             ColumnOption::NotNull => {
                                 nullable = false;
                             }
@@ -195,7 +191,6 @@ pub fn create_tables(sql: &str, tables: &mut HashMap<String, Vec<ColumnInfo>>) {
                     ColumnInfo {
                         name: normalize_identifier(&col.name),
                         data_type,
-                        check_constraint: check_expr_str,
                         has_default: is_default,
                     }
                 })

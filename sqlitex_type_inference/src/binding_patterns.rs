@@ -1294,7 +1294,6 @@ fn infer_cte_columns(
             cols.push(ColumnInfo {
                 name: col_name,
                 data_type: deduced_type,
-                check_constraint: None,
                 has_default: false,
             });
         }
@@ -1450,7 +1449,6 @@ fn traverse_set_expr(
                         projected_aliases.push(ColumnInfo {
                             name: alias.value.clone(),
                             data_type: derived_type,
-                            check_constraint: None,
                             has_default: false,
                         });
                     }

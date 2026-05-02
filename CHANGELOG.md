@@ -8,10 +8,13 @@ headers of
 ## ongoing - 2026-05-03
 
 ### Added
-compile time checks for virtual tables are not supported. Added this specific error for better clarity.
+- compile time checks for virtual tables are not supported. Added this specific error for better clarity.
 
 ### Fixed
 - `CREATE TABLE` detection is now more robust by using AST parsing instead of string matching.
+
+### Removed
+- Removed `check_constraint` field in `ColumnInfo` struct as it is no longer being used
 
 ## [0.2.2] - 2026-05-03
 
