@@ -1,7 +1,6 @@
 # sqlitex
 
-- [Installation](#installation)
-- [Quick Start](#quick-start)
+- [Usage](#usage)
 - [Connection methods](#connection-methods)
   1. [Inline Schema](#1-inline-schema)
   2. [SQL File](#2-sql-file)
@@ -23,15 +22,14 @@
 - [Default PRAGMA Settings](#default-pragma-settings)
 - [Strict INSERT Validation](#strict-insert-validation)
 
-## Installation
+## Usage
+Install it via
 
 ```bash
 cargo add sqlitex
 ```
 
-## Quick Start
-
-For more examples, look at the [examples folder in github](https://github.com/Nareshix/sqlitex/tree/main/examples)
+Simple usage example:
 
 ```rust
 use sqlitex::{Connection, sqlitex};
@@ -69,8 +67,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
     // prints out "0, Alice, true"
 }
-
 ```
+For more examples, look at the [examples folder in github](https://github.com/Nareshix/sqlitex/tree/main/examples)
+
 
 ## Connection methods
 
@@ -170,7 +169,7 @@ sql!("SELECT price::text FROM items")
 
 ## Important note on STRICT tables
 
-It is a common advice to create STRICT tables in sqlite. However, it is recommended not to use it with `sqlitex`
+It is a common advice to create STRICT tables in sqlite. However, it is not recommended to use it with `sqlitex`
 
 when using `sqlitex`, it **automatically** uses its own built-in "STRICT" table, which is more flexible and much more powerful than sqlite's native STRICT tables. It mostly follows [sqlite type affinity](https://www.sqlite.org/datatype3.html#affinity_name_examples) except for how `BOOLEAN`/`BOOL` is handled. It is shown in the table below
 
@@ -237,6 +236,7 @@ If you do somehow encounter this _false positive_, I would really appreicate it 
 ### How to use `sql_escape_hatch!`
 
 #### a. `SELECT` statements
+
 Note: This also works for `INSERT... RETURNING`
 You can map a query result to any struct by deriving `SqlMapping`.
 
@@ -288,6 +288,7 @@ struct Logger {
 ```
 
 ## Type casting
+
 only these are supported for now to avoid unexpected behaviour.
 
     Integer -> Real
@@ -298,6 +299,7 @@ only these are supported for now to avoid unexpected behaviour.
     Bool -> Real (true -> 1.0, false -> 0.0)
 
 ## Default PRAGMA Settings.
+
 The default settings are
 
 ```sql
@@ -306,6 +308,7 @@ PRAGMA foreign_keys = ON;
 PRAGMA journal_mode = WAL;
 PRAGMA synchronous = NORMAL;
 ```
+
 To override these settings or add more PRAGMA statements, u can use the `execute_runtime()` . They are simple enough that it doesn't warrant placing them in a `sql!()` macro for compile time checks, although nothing is stopping u from doing that
 
 ## Strict INSERT Validation

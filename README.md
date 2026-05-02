@@ -7,39 +7,16 @@ Sqlitex is a sqlite library for rust with compile time guarantees. It also has a
   - Automatically caches and reuses prepared statements for you
   - Automatically applies optimal PRAGMA settings for performance and reliability (e.g., WAL, synchronous=NORMAL and more).
 
-# Overview
 
-- [Installation](#installation)
-- [Feature showcase](#feature-showcase)
-- [Quick Start](#quick-start)
-- [Important note on STRICT tables](#important-note-on-strict-tables)
 
-## Installation
+## Usage
+Install it via
 
 ```bash
 cargo add sqlitex
 ```
 
-## Feature showcase
-
-1.  Auto generate method signatures with correct types and
-    Hover over to see sql code
-
-    ![usage](https://github.com/Nareshix/sqlitex/raw/main/amedia_for_readme/usage.gif)
-
-(Note: `LazyConnection` has been renamed to `Connection` in newer version. library name was previously called LazySql which has now been renamed to Sqlitex)
-
-2. Compile time errors with good error messages
-
-   ![error_1](https://github.com/Nareshix/sqlitex/blob/main/amedia_for_readme/error_1.png?raw=true)
-
-   ![error_2](https://github.com/Nareshix/sqlitex/blob/main/amedia_for_readme/error_2.png?raw=true)
-
-   ![error_3](https://github.com/Nareshix/sqlitex/blob/main/amedia_for_readme/error_3.png?raw=true)
-
-## Quick Start
-For more examples and features, look at the [examples](./examples/) folder or read the [documentations](https://docs.rs/sqlitex/latest/sqlitex/).
-
+Simple usage example:
 
 ```rust
 use sqlitex::{Connection, sqlitex};
@@ -78,12 +55,35 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // prints out "0, Alice, true"
 }
 ```
-*A more detailed version of this exact quickstart can be found* [here](./examples/quick_start.rs)
+
+_A more detailed version of this exact quickstart can be found_ [here](./examples/quick_start.rs)
+
+For more examples and features, look at the [examples](./examples/) folder or read the [documentations](https://docs.rs/sqlitex/latest/sqlitex/).
+
+
+
+## Feature showcase
+
+1.  Auto generate method signatures with correct types and
+    Hover over to see sql code
+
+    ![usage](https://github.com/Nareshix/sqlitex/raw/main/amedia_for_readme/usage.gif)
+
+(Note: `LazyConnection` has been renamed to `Connection` in newer version. library name was previously called LazySql which has now been renamed to Sqlitex)
+
+2. Compile time errors with good error messages
+
+   ![error_1](https://github.com/Nareshix/sqlitex/blob/main/amedia_for_readme/error_1.png?raw=true)
+
+   ![error_2](https://github.com/Nareshix/sqlitex/blob/main/amedia_for_readme/error_2.png?raw=true)
+
+   ![error_3](https://github.com/Nareshix/sqlitex/blob/main/amedia_for_readme/error_3.png?raw=true)
+
 
 
 # Important note on STRICT tables
 
-It is a common advice to create STRICT tables in sqlite. However, it is recommended not to use it with `sqlitex`
+It is a common advice to create STRICT tables in sqlite. However, it is not recommended to use it with `sqlitex`
 
 creating STRICT tables in sqlite will make this library less powerful. STRICT table only allows `INT`, `INTEGER`, `REAL`, `TEXT`, `BLOB`, `ANY` datatypes.
 

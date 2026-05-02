@@ -39,8 +39,7 @@ fsync so its still bulk depsite transaction
 maybe generate a _bulk method (simlar to python executemany) for write operations. but it can pollute the ide autosuggestions fast. think about runtime wise
 2. begin immediate (https://sqlite.org/forum/forumpost/04ed1d235b)
 3. chrono/time/jiff or other datetime-based library support
-4. quickstart too legnthy. remove comments in readme but keep in examples
-
+4. might allwo strict table to wrok well with bool, and deprecate the flexible type
 # internal code improvement concerns
 sqlitex_type_inference crate needs some refactoring as the codebase is q messy
 add contributing.md cuz u seem to forget wht u write lol then spenda lot of time looking though code to rmb wht u did. gonna make same mistake again rn :p
