@@ -16,6 +16,8 @@ PRAGMA synchronous = NORMAL;
 ```
 This gives best performance and high relibaility
 
+fts5 support (ongoing)
+
 ## [0.2.1] - 2026-06-01
 Documentation formatting
 
