@@ -13,6 +13,11 @@ pub trait FromSql {
 impl FromSql for String {
     unsafe fn from_sql(stmt: *mut sqlite3_stmt, index: i32) -> Self {
         let c_string = unsafe { libsqlite3_sys::sqlite3_column_text(stmt, index) } as *const i8;
+
+        if c_string.is_null() {
+            return String::new();
+        }
+
         unsafe { CStr::from_ptr(c_string).to_string_lossy().into_owned() }
     }
 }
