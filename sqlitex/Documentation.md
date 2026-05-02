@@ -122,7 +122,7 @@ struct App { ... }
 
 If you use IDE extensions such as rust-analyser and it does not pick up changes like showing old errors, you may have to type anything on that rust file (e.g. spacebar) to immediately trigger the ide extension for it to pick up the changes in the sql file.
 
-![sql-file-watcher-trigger](./sql-file-watcher-trigger.gif)
+![sql-file-watcher-trigger](https://raw.githubusercontent.com/Nareshix/sqlitex/refs/heads/main/amedia_for_readme/sql-file-watcher-trigger.gif)
 
 If it still does not work, you may have to restart ur rust lsp server.
 
