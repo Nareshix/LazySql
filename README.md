@@ -27,7 +27,7 @@ cargo add sqlitex
 1.  Auto generate method signatures with correct types and
     Hover over to see sql code
 
-        ![usage](https://github.com/Nareshix/sqlitex/raw/main/amedia_for_readme/usage.gif)
+    ![usage](https://github.com/Nareshix/sqlitex/raw/main/amedia_for_readme/usage.gif)
 
 (Note: `LazyConnection` has been renamed to `Connection` in newer version. library name was previously called LazySql which has now been renamed to Sqlitex)
 
