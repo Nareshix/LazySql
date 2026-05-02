@@ -5,6 +5,10 @@ headers of
 
 `Added`, `Migration`, `Changed`, `Deprecated`, `Removed`, `Fixed`, `Security`.
 
+
+## [0.2.1] - 2026-06-01
+Documentation formatting
+
 ## [0.2.0] - 2026-05-02
 
 ### Changed
