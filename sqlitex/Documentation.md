@@ -120,6 +120,14 @@ Point to a `.sql` file. The compile time checks will be done against this sql fi
 struct App { ... }
 ```
 
+If you use IDE extensions such as rust-analyser and it does not pick up changes like showing old errors, you may have to type anything on that rust file (e.g. spacebar) to immediately trigger the ide extension for it to pick up the changes in the sql file.
+
+![sql-file-watcher-trigger](./sql-file-watcher-trigger.gif)
+
+If it still does not work, you may have to restart ur rust lsp server.
+
+This issue can be avoided in the future when [tracked_path](https://github.com/rust-lang/rust/issues/99515) gets stabilised
+
 ### 3. Live Database
 
 Point to an existing `.db` binary file. `sqlitex` inspects the live metadata to validate your queries.

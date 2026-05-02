@@ -11,6 +11,7 @@ follows yyyy-mm-dd format
     - Bool -> Integer (true -> 1, false -> 0)
     - Bool -> Real (true -> 1.0, false -> 0.0)
 TODO explain the rbeaking chanegs
+explained the tiny quirk of relying on sql watcher to trigger the ide extension for it to pick up changes in the sql file. explained it in the docs.
 
 ## [0.1.0] - 2026-05-01
 TODO based on the git release
