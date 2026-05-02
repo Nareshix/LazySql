@@ -5,10 +5,7 @@ use proc_macro::TokenStream;
 use quote::quote;
 use sqlitex_core::utility::utils::{get_db_schema, validate_sql_syntax_with_sqlite};
 use sqlitex_type_inference::{
-    binding_patterns::get_type_of_binding_parameters, expr::BaseType, pg_cast_syntax_to_sqlite,
-    rewrite_bool_columns, select_patterns::get_types_from_select, table::create_tables,
-    validate_cast_types, validate_create_table_types, validate_insert_strict,
-    validate_no_virtual_tables, validate_single_statement,
+    binding_patterns::get_type_of_binding_parameters, expr::BaseType, is_create_table, pg_cast_syntax_to_sqlite, rewrite_bool_columns, select_patterns::get_types_from_select, table::create_tables, validate_cast_types, validate_create_table_types, validate_insert_strict, validate_no_virtual_tables, validate_single_statement
 };
 use syn::{
     Data, DeriveInput, Fields, Ident, ItemStruct, LitStr, Type, parse_macro_input, parse_quote,
@@ -217,7 +214,7 @@ fn expand(
                 return Err(syn::Error::new(sql_lit.span(), err_msg.to_string()));
             }
 
-            if sql_query.trim().to_uppercase().starts_with("CREATE TABLE") {
+            if is_create_table(&sql_query) {
                 create_tables(&sql_query, &mut all_tables);
 
                 field.ty = parse_quote!(sqlitex::internal_sqlite::sqlitex_statement::SqlitexStmt);

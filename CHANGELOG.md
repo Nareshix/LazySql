@@ -3,13 +3,15 @@
 follows `yyyy-mm-dd` format and can have
 headers of
 
-`Added`, `Migration`, `Changed`, `Deprecated`, `Removed`, `Fixed`, `Security`.
+`Added`, `Migration`/`Breaking Changes`, `Changed`, `Deprecated`, `Removed`, `Fixed`, `Security`.
 
 ## ongoing - 2026-05-03
 
 ### Added
 compile time checks for virtual tables are not supported. Added this specific error for better clarity.
 
+### Fixed
+- `CREATE TABLE` detection is now more robust by using AST parsing instead of string matching.
 
 ## [0.2.2] - 2026-05-03
 

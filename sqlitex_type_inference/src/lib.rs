@@ -63,6 +63,14 @@ pub fn validate_create_table_types(sql: &str) -> Result<(), String> {
     }
     Ok(())
 }
+pub fn is_create_table(sql: &str) -> bool {
+    Parser::parse_sql(&SQLiteDialect {}, sql)
+        .ok()
+        .and_then(|ast| ast.into_iter().next())
+        .map(|stmt| matches!(stmt, Statement::CreateTable(_)))
+        .unwrap_or(false)
+}
+
 pub fn validate_no_virtual_tables(sql: &str) -> Result<(), String> {
     let Ok(statements) = Parser::parse_sql(&SQLiteDialect {}, sql) else {
         return Ok(());
