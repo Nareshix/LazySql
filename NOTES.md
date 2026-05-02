@@ -20,21 +20,20 @@ but still need to add the impl in ToSql and FromSql
 
 To allow CREATE TABLE stmts anywhere within the macro, we can scan all the create tables first and add it to memory. I did that originally but there is an issue. When we make a mistake in CREATE TABLE, and that stmt is somewhere in between multiple sql!() macros, the error wouldnt highlight the CREATE TABLE stmt, but isntead highlight the lines before it saying things like table do not exist. THis is extremley misleading and confusing, so for now just leave things as is until u come back to it later. U did document this in the quick_start and documentation so its good enough
 
-
-# Feature addition (subjected to confirmation)
 1. for hover over funciton, need to test whether it works on other editors. works great on vscode
 
 2. rn blob loads everything to memory. maybe add streaming support for blob?
 
 3. check_constraint field in SELECT is ignored for now.
 
-4. upsert - INSERT OR REPLACE INTO users (id, name) VALUES (?, ?)
 
-5. bulk insert
-6. begin immediate
-7. chrono/time/jiff or other datetime-based library support
-8. better egonomic for bulk operation? maybe.
-9. url crate?
+# Feature addition (subjected to confirmation)
+
+1. bulk insert
+2. begin immediate
+3. chrono/time/jiff or other datetime-based library support
+4. better egonomic for bulk operation? maybe.
+5. url crate?
 10. it follows an opinionated API design
 11. Doesn't support Batch Execution ergonomically. You would need to resort to `sql!()` or `sql_escape_hatch!()` macro
 
