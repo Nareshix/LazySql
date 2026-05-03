@@ -79,24 +79,3 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 _A more detailed version of this exact quickstart can be found_ [here](./examples/quick_start.rs)
 
 For more examples and features, look at the [examples](./examples/) folder or read the [documentations](https://docs.rs/sqlitex/latest/sqlitex/).
-
-
-
-
-# Important note on STRICT tables
-
-It is a common advice to create STRICT tables in sqlite. However, it is not recommended to use it with `sqlitex`
-
-creating STRICT tables in sqlite will make this library less powerful. STRICT table only allows `INT`, `INTEGER`, `REAL`, `TEXT`, `BLOB`, `ANY` datatypes.
-
-This library offers
-
-1. casting as bool
-2. creating tables with bool data type,
-3. having slightly more flexible data types (e.g. `REAL`, `NUMERIC`, `FLOAT` are all synonymous).
-
-By enabling STRICT tables you will lose all of these features.
-
-[you can read it up more on here](./sqlitex/Documentation.md#a-note-on-strict-tables)
-or
-[if you are only interested in having compile time checks for boolean using pure sqlite approach](./sqlitex/Documentation.md#how-to-get-boolean-support-for-compile-time-checks-without-using-sqlitexs-bool-or-boolean-data-type)
