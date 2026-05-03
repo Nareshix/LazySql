@@ -8,10 +8,6 @@ Sqlitex is a sqlite library for rust. It offers
   - Automatically caches and reuses prepared statements for you
   - Automatically applies optimal PRAGMA settings for performance and reliability (e.g., WAL, synchronous=NORMAL and more).
 
-
-
-
-
 ## Feature showcase
 
 1.  Auto generate method signatures with correct types and
@@ -30,7 +26,7 @@ Sqlitex is a sqlite library for rust. It offers
    ![error_3](https://github.com/Nareshix/sqlitex/blob/main/amedia_for_readme/error_3.png?raw=true)
 
 
-## Usage
+## Quickstart
 Install it via
 
 ```bash
