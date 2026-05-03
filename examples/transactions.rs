@@ -1,5 +1,5 @@
-// Note: you cannot name a field called `transaction` in the struct since its a reserved method name.
-// Failiure to do so will result in a compile time error
+//! Note: you cannot name a field called `transaction` in the struct since its a reserved method name.
+//! Failiure to do so will result in a compile time error
 
 use sqlitex::{Connection, sqlitex};
 
