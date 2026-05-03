@@ -69,6 +69,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // prints out "0, Alice, true"
 }
 ```
+*A more detailed version of this example can be found* [here](https://github.com/Nareshix/sqlitex/blob/main/examples/quick_start.rs)
+
 
 For more examples, look at the [examples folder in github](https://github.com/Nareshix/sqlitex/tree/main/examples)
 
@@ -84,35 +86,60 @@ As seen in the Quick Start. Define tables inside the struct.
 #[sqlitex]
 struct App { ... }
 ```
+Since `sql!()` macro only accepts one sql stmt at a time, it can get tedious quickly if you have mulitple tables as u need to name them and intilaise them.
 
+The next 2 methods are often recommended in real world projects since they are more flexible.
 ### 2. SQL File
 
 Point to a `.sql` file. The compile time checks will be done against this sql file (ensure that there is `CREATE TABLE`). `sqlitex` watches this file; if you edit it, rust recompiles automatically to ensure type safety.
+**Make sure that the sql file is placed at the root of your cargo.toml file** Else, there will be a compile time error which will help you navigate on where to place the file
 
 ```rust
 #[sqlitex("schema.sql")]
 // you dont have to create tables. Any read/write sql queries gets compile time guarantees.
 struct App { ... }
 ```
+`init` method is generated automatically and becomes a reserved keyword. You can use it to run all the sql stmts in the file given.
+For example
 
+```rust
+#[sqlitex("schema.sql")]
+struct App {
+    add_user: sql!("INSERT INTO users (username) VALUES (?)"),
+    get_all: sql!("SELECT * FROM users"),
+}
+fn main() {
+    let conn = Connection::open_memory().unwrap();
+    let mut db = App::new(conn);
+
+    // init is auto generated when we connect to an external sql file.
+    // by running this, it will run all the sql queries on that file, which in this case is `schema.sql`
+    db.init()?;
+
+    //...
+}
+```
+#### Tiny quirk with IDEs
 If you use IDE extensions such as rust-analyser and it does not pick up changes like showing old errors, you may have to type anything on that rust file (e.g. spacebar) to immediately trigger the ide extension for it to pick up the changes in the sql file.
 
 ![sql-file-watcher-trigger](https://raw.githubusercontent.com/Nareshix/sqlitex/refs/heads/main/amedia_for_readme/sql-file-watcher-trigger.gif)
 
-If it still does not work, you may have to restart ur rust lsp server.
+If it still does not work, you may have to restart ur rust lsp server. On VSCode, its `Ctrl` + `Shift` + `p` and type in restart rust server
 
 This issue can be avoided in the future when [tracked_path](https://github.com/rust-lang/rust/issues/99515) gets stabilised
 
 ### 3. Live Database
 
-Point to an existing `.db` binary file. `sqlitex` inspects the live metadata to validate your queries.
+Point to an existing `.db` binary file. `sqlitex` inspects the live metadata to validate your queries at compile time. No additional method is generated.
+
+Similar to connection via sql file, **ensure that the db file is placed at the root of your cargo.toml file** Else, there will be a compile time error which will help you navigate on where to place the file
 
 ```rust
 #[sqlitex("production_snapshot.db")]
 struct App { ... }
 ```
 
-## Sqlitex features
+## Core Concepts
 
 the `#[sqlitex!]` macro brings `sql!` and `sql_escape_hatch!` macro. so there is no need to import them. and they can only be used within structs defined with `sqlitex!`
 
@@ -151,31 +178,9 @@ sql!("SELECT price::text FROM items")
   let results = db.get_active_users(false)?;
   let first_result = results.first()?.unwrap(); // returns the first row from the returned rows
   ```
-
-## Transactions
-
-[Read this simple and short example on how to use transactions (at compile time)](https://github.com/Nareshix/sqlitex/blob/main/examples/transactions.rs)
-
-## Runtime features
-
-**Strongly** recommended to use the `sql!` macro when possible
-
-[simple and short example for all runtime feature](https://github.com/Nareshix/sqlitex/blob/main/examples/runtime.rs)
-
-[simple and short example for transaction feature at runtime ](https://github.com/Nareshix/sqlitex/blob/main/examples/transactions_runtime.rs)
-
-## BLOB
-
-[simple and short example for BLOB](https://github.com/Nareshix/sqlitex/tree/main/examples/blob)
-
-TODO
-
-## Important note on STRICT tables
-
-It is a common advice to create STRICT tables in sqlite. However, it is not recommended to use it with `sqlitex`
-
-when using `sqlitex`, it **automatically** uses its own built-in "STRICT" table, which is more flexible and much more powerful than sqlite's native STRICT tables. It mostly follows [sqlite type affinity](https://www.sqlite.org/datatype3.html#affinity_name_examples) except for how `BOOLEAN`/`BOOL` is handled. It is shown in the table below
-
+## BLOB, Transactions, Runtime options etc.
+They all are in the examples folder in github. They are short, simple and self-explanatory. https://github.com/Nareshix/sqlitex/tree/main/examples
+## Type mappings
 | SQLite Type without STRICT TABLE                                                                         | Rust Type           |
 | -------------------------------------------------------------------------------------------------------- | ------------------- |
 | `TEXT` / `CHARACTER` / `VARCHAR` / `CHARVARYING` / `CHARACTERVARYING` / `NVARCHAR` / `CLOB`              | `String` / `&str`   |
@@ -184,44 +189,17 @@ when using `sqlitex`, it **automatically** uses its own built-in "STRICT" table,
 | **`BOOLEAN`** / **`BOOL`**                                                                               | `bool`              |
 | `BLOB` / `BYTEA`                                                                                         | `Vec<u8>` / `&[u8]` |
 
-| SQLite Type with STRICT TABLE | Rust Type           |
-| ----------------------------- | ------------------- |
-| `INTEGER` / `INT`             | `i64`               |
-| `REAL`                        | `f64`               |
-| `TEXT`                        | `String` / `&str`   |
-| `BLOB`                        | `Vec<u8>` / `&[u8]` |
-| `ANY`                         | `-`                 |
+## Type casting
 
-As we can see, `sqlitex` built-in "STRICT" table gives us more flexible types like FLOAT and DECIMAL and, more powerfully, a Boolean datatype
+only these are supported for now to avoid unexpected behaviour.
 
-This would also affect how casting works. Using the built in "STRICT" table for instance, allows casting with bool, but manually creating a STRICT table will make casting as bool impossible.
+    Integer -> Real
+    Real -> Integer (note it gets truncated)
+    Integer -> Text
+    Real -> Text
+    Bool -> Integer (true -> 1, false -> 0)
+    Bool -> Real (true -> 1.0, false -> 0.0)
 
-Internally, creating table with `BOOLEAN` and `BOOL` data type aliases to `INTEGER CHECK (col IN (0, 1))`
-
-### How to get boolean support for compile time checks without using `sqlitex`'s `bool` or `boolean` data type?
-
-If u prefer a sqlite-pure approach, make sure u add a check constraint for the column like either one of the following and sqlitex will automatically detect it as bool:
-
-1.  CHECK (col IN (0, 1))
-2.  CHECK (col = 0 OR col = 1)
-
-It does not matter whether the table is created with STRICT or not. You can still get compile time checks and boolean support as long as you have either of the check constraint.
-
-For isntance
-
-```rust
-#[lazy_sql]
-struct AppDatabase {
-    init: sql!("
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY NOT NULL,
-            username TEXT NOT NULL,
-            is_active INTEGER NOT NULL CHECK (is_active IN (0, 1)) -- the library infers this as bool.
-        )
-    "),
-    // ...
-}
-```
 
 ## When to use `sql_escape_hatch!`
 
@@ -290,16 +268,6 @@ struct Logger {
 // can continue to use it normally.
 ```
 
-## Type casting
-
-only these are supported for now to avoid unexpected behaviour.
-
-    Integer -> Real
-    Real -> Integer (note it gets truncated)
-    Integer -> Text
-    Real -> Text
-    Bool -> Integer (true -> 1, false -> 0)
-    Bool -> Real (true -> 1.0, false -> 0.0)
 
 ## Default PRAGMA Settings.
 
