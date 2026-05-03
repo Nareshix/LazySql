@@ -76,3 +76,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 _A more detailed version of this exact quickstart can be found_ [here](./examples/quick_start.rs)
 
 For more examples and features, look at the [examples](./examples/) folder or read the [documentations](https://docs.rs/sqlitex/latest/sqlitex/).
+
+## Comparison with other libraries
+[Look here](./COMPARISON.md)
