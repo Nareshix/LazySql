@@ -9,6 +9,26 @@ Sqlitex is a sqlite library for rust with compile time guarantees. It also has a
 
 
 
+
+
+## Feature showcase
+
+1.  Auto generate method signatures with correct types and
+    Hover over to see sql code
+
+    ![usage](https://github.com/Nareshix/sqlitex/raw/main/amedia_for_readme/usage.gif)
+
+(Note: `LazyConnection` has been renamed to `Connection` in newer version. library name was previously called LazySql which has now been renamed to Sqlitex)
+
+2. Compile time errors with good error messages
+
+   ![error_1](https://github.com/Nareshix/sqlitex/blob/main/amedia_for_readme/error_1.png?raw=true)
+
+   ![error_2](https://github.com/Nareshix/sqlitex/blob/main/amedia_for_readme/error_2.png?raw=true)
+
+   ![error_3](https://github.com/Nareshix/sqlitex/blob/main/amedia_for_readme/error_3.png?raw=true)
+
+
 ## Usage
 Install it via
 
@@ -60,24 +80,6 @@ _A more detailed version of this exact quickstart can be found_ [here](./example
 
 For more examples and features, look at the [examples](./examples/) folder or read the [documentations](https://docs.rs/sqlitex/latest/sqlitex/).
 
-
-
-## Feature showcase
-
-1.  Auto generate method signatures with correct types and
-    Hover over to see sql code
-
-    ![usage](https://github.com/Nareshix/sqlitex/raw/main/amedia_for_readme/usage.gif)
-
-(Note: `LazyConnection` has been renamed to `Connection` in newer version. library name was previously called LazySql which has now been renamed to Sqlitex)
-
-2. Compile time errors with good error messages
-
-   ![error_1](https://github.com/Nareshix/sqlitex/blob/main/amedia_for_readme/error_1.png?raw=true)
-
-   ![error_2](https://github.com/Nareshix/sqlitex/blob/main/amedia_for_readme/error_2.png?raw=true)
-
-   ![error_3](https://github.com/Nareshix/sqlitex/blob/main/amedia_for_readme/error_3.png?raw=true)
 
 
 
