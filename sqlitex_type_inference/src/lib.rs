@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use crate::expr::sqlite_datatype_to_base_type;
 use crate::table::{ColumnInfo, normalize_identifier};
 use sqlparser::ast::{ColumnOption, ColumnOptionDef, DataType, Expr, Value, Visit, Visitor};
-use sqlparser::{ast::Statement, dialect::GenericDialect, dialect::SQLiteDialect, parser::Parser};
+use sqlparser::{ast::Statement, dialect::SQLiteDialect, parser::Parser};
 use std::ops::ControlFlow;
 pub mod binding_patterns;
 pub mod expr;
@@ -51,7 +51,16 @@ pub fn validate_create_table_types(sql: &str) -> Result<(), String> {
 
     for statement in &statements {
         if let Statement::CreateTable(create) = statement {
+            // check is done for external .sql file
+            let is_strict = create.strict;
             for col in &create.columns {
+                let is_bool = matches!(&col.data_type, DataType::Boolean | DataType::Bool);
+                if is_strict && is_bool {
+                    return Err(format!(
+                        "STRICT tables do not support BOOL/BOOLEAN columns directly. Please use `INTEGER CHECK ({} IN (0, 1))` instead to get the same compile time benefits.",
+                        col.name
+                    ));
+                }
                 sqlite_datatype_to_base_type(&col.data_type).map_err(|_| {
                     format!(
                         "Unknown type `{}` for column `{}`.",
@@ -287,18 +296,26 @@ pub fn pg_cast_syntax_to_sqlite(sql: &str) -> String {
     chars.into_iter().collect()
 }
 
-pub fn rewrite_bool_columns(sql: &str) -> String {
-    let dialect = GenericDialect {};
+pub fn rewrite_bool_columns(sql: &str) -> Result<String, String> {
+    let dialect = SQLiteDialect {};
 
     let Ok(mut ast) = Parser::parse_sql(&dialect, sql) else {
-        return sql.to_string();
+        return Ok(sql.to_string());
     };
 
     for stmt in &mut ast {
         if let Statement::CreateTable(create) = stmt {
+           // check is done for sql!() macro
+            let is_strict = create.strict;
             for col in &mut create.columns {
                 let is_bool = matches!(&col.data_type, DataType::Boolean | DataType::Bool);
                 if is_bool {
+                    if is_strict {
+                        return Err(format!(
+                            "STRICT tables do not support BOOL/BOOLEAN columns directly. Please use `INTEGER CHECK ({} IN (0, 1))` instead to get the same compile time benefits.",
+                            col.name
+                        ));
+                    }
                     col.data_type = DataType::Integer(None);
 
                     let check_expr = Expr::InList {
@@ -319,8 +336,8 @@ pub fn rewrite_bool_columns(sql: &str) -> String {
         }
     }
 
-    ast.iter()
+    Ok(ast.iter()
         .map(|s| s.to_string())
         .collect::<Vec<String>>()
-        .join(";\n")
+        .join(";\n"))
 }

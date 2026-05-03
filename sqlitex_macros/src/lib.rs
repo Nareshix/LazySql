@@ -195,7 +195,8 @@ fn expand(
         // Check if type is sql!("...")
         if let Some(sql_lit) = parse_sql_macro_type(&field.ty)? {
             let sql_query = pg_cast_syntax_to_sqlite(&sql_lit.value());
-            let sql_query = rewrite_bool_columns(&sql_query);
+            let sql_query = rewrite_bool_columns(&sql_query)
+                .map_err(|msg| syn::Error::new(sql_lit.span(), msg))?;
             validate_no_virtual_tables(&sql_query)
                 .map_err(|msg| syn::Error::new(sql_lit.span(), msg))?;
             validate_cast_types(&sql_query).map_err(|msg| syn::Error::new(sql_lit.span(), msg))?;
@@ -570,7 +571,8 @@ fn expand(
         } else if let Some(runtime_input) = parse_runtime_macro(&field.ty)? {
             let sql_lit = runtime_input.sql;
             let sql_query = pg_cast_syntax_to_sqlite(&sql_lit.value());
-            let sql_query = rewrite_bool_columns(&sql_query);
+            let sql_query = rewrite_bool_columns(&sql_query)
+                .map_err(|msg| syn::Error::new(sql_lit.span(), msg))?;
 
             let transpiled_sql_lit = syn::LitStr::new(&sql_query, sql_lit.span());
 
