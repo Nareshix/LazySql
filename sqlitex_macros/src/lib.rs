@@ -425,6 +425,129 @@ fn expand(
                         Ok(())
                     }
                 });
+
+                // generate _many method
+                let many_ident = quote::format_ident!("{}_many", ident);
+
+                let mut many_owned_types = Vec::new();
+                let mut many_bind_calls = Vec::new();
+
+                for (i, bind_type) in binding_types.iter().enumerate() {
+                    let bind_index = (i + 1) as i32;
+                    let tuple_idx = syn::Index::from(i);
+
+                    let owned_base_type = match bind_type.base_type {
+                        BaseType::Integer => quote! { i64 },
+                        BaseType::Real => quote! { f64 },
+                        BaseType::Bool => quote! { bool },
+                        BaseType::Text => quote! { String },
+                        BaseType::Blob => quote! { Vec<u8> },
+                        _ => quote! {},
+                    };
+
+                    let owned_final_type = if bind_type.nullable {
+                        quote! { Option<#owned_base_type> }
+                    } else {
+                        quote! { #owned_base_type }
+                    };
+
+                    many_owned_types.push(owned_final_type);
+
+                    let bind_expr = if bind_type.nullable {
+                        match bind_type.base_type {
+                            BaseType::Text => quote! { item.#tuple_idx.as_deref() },
+                            BaseType::Blob => quote! { item.#tuple_idx.as_deref() },
+                            _ => quote! { item.#tuple_idx },
+                        }
+                    } else {
+                        match bind_type.base_type {
+                            BaseType::Text => quote! { item.#tuple_idx.as_str() },
+                            BaseType::Blob => quote! { item.#tuple_idx.as_slice() },
+                            _ => quote! { item.#tuple_idx },
+                        }
+                    };
+
+                    many_bind_calls.push(quote! {
+        if let Err(__e) = preparred_statement.bind_parameter(#bind_index, #bind_expr) {
+            let _ = self.__db.exec("ROLLBACK");
+            return Err(sqlitex::errors::Error::from(sqlitex::errors::SqlWriteBindingError::Bind(__e)));
+        }
+    });
+                }
+
+                let (item_type, final_many_bind_calls) = if binding_types.len() == 1 {
+                    let bind_type = &binding_types[0];
+                    let single_bind_expr = if bind_type.nullable {
+                        match bind_type.base_type {
+                            BaseType::Text => quote! { item.as_deref() },
+                            BaseType::Blob => quote! { item.as_deref() },
+                            _ => quote! { *item },
+                        }
+                    } else {
+                        match bind_type.base_type {
+                            BaseType::Text => quote! { item.as_str() },
+                            BaseType::Blob => quote! { item.as_slice() },
+                            _ => quote! { *item },
+                        }
+                    };
+
+                    let single_call = quote! {
+                        if let Err(__e) = preparred_statement.bind_parameter(1, #single_bind_expr) {
+                            let _ = self.__db.exec("ROLLBACK");
+                            return Err(sqlitex::errors::Error::from(sqlitex::errors::SqlWriteBindingError::Bind(__e)));
+                        }
+                    };
+
+                    (many_owned_types[0].clone(), vec![single_call])
+                } else {
+                    (quote! { (#(#many_owned_types),*) }, many_bind_calls)
+                };
+
+                let many_doc_header = format!("Same as `{}` but you can write multiple rows within a single transaction by passing a list. If you need more precise batching, use `transactions`", ident);
+
+                generated_methods.push(quote! {
+    #(#field_attrs)*
+    #[doc = #many_doc_header]
+    #[doc = #doc_comment]
+    pub fn #many_ident(&mut self, items: &[#item_type]) -> Result<(), sqlitex::errors::Error> {
+        if items.is_empty() {
+            return Ok(());
+        }
+
+        if self.#ident.stmt.is_null() {
+            unsafe {
+                sqlitex::utility::utils::prepare_stmt(
+                    self.__db.db,
+                    &mut self.#ident.stmt,
+                    self.#ident.sql_query
+                ).map_err(|e| sqlitex::errors::Error::from(sqlitex::errors::SqlWriteBindingError::Prepare(e)))?;
+            }
+        }
+
+        self.__db.exec("BEGIN").map_err(sqlitex::errors::Error::from)?;
+
+        for item in items {
+            let mut preparred_statement = sqlitex::internal_sqlite::preparred_statement::PreparredStmt {
+                stmt: self.#ident.stmt,
+                conn: self.__db.db,
+            };
+
+            #(#final_many_bind_calls)*
+
+            if let Err(__e) = preparred_statement.step() {
+                let _ = self.__db.exec("ROLLBACK");
+                return Err(sqlitex::errors::Error::from(sqlitex::errors::SqlWriteBindingError::Step(__e)));
+            }
+        }
+
+        if let Err(__e) = self.__db.exec("COMMIT") {
+            let _ = self.__db.exec("ROLLBACK");
+            return Err(sqlitex::errors::Error::from(__e));
+        }
+
+        Ok(())
+    }
+});
             } else if !select_types.is_empty() && binding_types.is_empty() {
                 let method_name = ident.to_string();
                 let pascal_name: String = method_name
