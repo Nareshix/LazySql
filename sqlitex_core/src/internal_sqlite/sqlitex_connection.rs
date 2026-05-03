@@ -275,23 +275,43 @@ impl Connection {
     where
         F: FnOnce(&Self) -> Result<T, Error>,
     {
-        self.execute_batch("BEGIN IMMEDIATE").map_err(Error::from)?;
+        // Check if we are the outermost transaction
+        let is_outermost = unsafe { ffi::sqlite3_get_autocommit(self.db) != 0 };
+
+        if is_outermost {
+            self.execute_batch("BEGIN IMMEDIATE").map_err(Error::from)?;
+        } else {
+            self.execute_batch("SAVEPOINT sqlitex_runtime_tx").map_err(Error::from)?;
+        }
 
         let result = f(self);
 
         match result {
             Ok(val) => {
-                if let Err(e) = self.execute_batch("COMMIT") {
-                    return Err(Error::from(e));
+                if is_outermost {
+                    if let Err(e) = self.execute_batch("COMMIT") {
+                        return Err(Error::from(e));
+                    }
+                } else {
+                    if let Err(e) = self.execute_batch("RELEASE SAVEPOINT sqlitex_runtime_tx") {
+                        return Err(Error::from(e));
+                    }
                 }
                 Ok(val)
             }
             Err(e) => {
-                let _ = self.execute_batch("ROLLBACK");
+                if is_outermost {
+                    let _ = self.execute_batch("ROLLBACK");
+                } else {
+                    let _ = self.execute_batch("ROLLBACK TO SAVEPOINT sqlitex_runtime_tx");
+                    let _ = self.execute_batch("RELEASE SAVEPOINT sqlitex_runtime_tx");
+                }
                 Err(e)
             }
         }
     }
+
+    
     // pub fn transaction_immediate<T, F>(&self, f: F) -> Result<T, Error>
     // where
     //     F: FnOnce(&Self) -> Result<T, Error>,
