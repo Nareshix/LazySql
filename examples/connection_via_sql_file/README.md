@@ -1,0 +1,1 @@
+The .sql file must be placed in the **same dir as ur root cargo.toml file**
