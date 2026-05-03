@@ -136,6 +136,8 @@ fn expand(
 ) -> syn::Result<proc_macro2::TokenStream> {
     let mut all_tables = HashMap::new();
 
+    let mut schema_init_method = quote! {};
+
     if let Some(path) = db_path_lit {
         let db_path = path.value();
 
@@ -149,6 +151,24 @@ fn expand(
 
             validate_create_table_types(&content)
                 .map_err(|msg| syn::Error::new(path.span(), format!("In {}: {}", db_path, msg)))?;
+
+            sqlitex_type_inference::validate_sql_file_syntax(&content)
+                .map_err(|msg| syn::Error::new(path.span(), format!("In {}: {}", db_path, msg)))?;
+
+            // Generate the init method only if a .sql file is provided
+            let filename = std::path::Path::new(&db_path)
+                .file_name()
+                .and_then(|f| f.to_str())
+                .unwrap_or(&db_path);
+
+            let doc_msg = format!("Executes all SQL statements defined in the external `{}` file", filename);
+
+            schema_init_method = quote! {
+                #[doc = #doc_msg]
+                pub fn init(&self) -> Result<(), sqlitex::errors::SqliteFailure> {
+                    self.__db.exec(include_str!(#path))
+                }
+            };
         }
 
         let schemas = get_db_schema(&db_path).map_err(|err| {
@@ -186,7 +206,15 @@ fn expand(
         if ident == "transaction" {
             return Err(syn::Error::new(
                 ident.span(),
-                "`transaction` is a reserved keyword. Please rename this field to something else.",
+                "`transaction` is a reserved keyword. Rename this field to something else.",
+            ));
+        }
+
+        // `init` method is reserved when pointing to an external sql file
+        if ident == "init" && db_path_lit.is_some() && db_path_lit.unwrap().value().ends_with(".sql") {
+            return Err(syn::Error::new(
+                ident.span(),
+                "`init` is a reserved keyword when pointing to an external .sql file. Rename this field to something else.",
             ));
         }
 
@@ -739,7 +767,7 @@ fn expand(
         }
     }
 
-
+                #schema_init_method
                 #(#generated_methods)*
             }
         }

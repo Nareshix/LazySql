@@ -1,5 +1,5 @@
 use libsqlite3_sys::{
-    self as ffi, SQLITE_DONE, SQLITE_OK, SQLITE_OPEN_CREATE, SQLITE_OPEN_MEMORY,
+    self as ffi, SQLITE_DONE, SQLITE_ERROR, SQLITE_OK, SQLITE_OPEN_CREATE, SQLITE_OPEN_MEMORY,
     SQLITE_OPEN_READWRITE, sqlite3, sqlite3_busy_timeout, sqlite3_changes, sqlite3_column_count,
     sqlite3_column_name, sqlite3_exec, sqlite3_finalize, sqlite3_step,
 };
@@ -68,7 +68,7 @@ impl Connection {
                 let sync = CString::new("PRAGMA synchronous = NORMAL;").unwrap();
                 sqlite3_exec(db, sync.as_ptr(), None, ptr::null_mut(), ptr::null_mut());
             };
-            Ok(Arc::new(Self { db }))   
+            Ok(Arc::new(Self { db }))
         } else {
             let (code, error_msg) = unsafe { get_sqlite_failiure(db) };
             unsafe { close_db(db) };
@@ -76,9 +76,13 @@ impl Connection {
         }
     }
 
-    // note unused internally and undocumented. rarelys used anyways
+    /// Executes all SQL statements in a string. Alias to `execute_many_runtime`. avoid using this as it will be deprecated soon. TODO
     pub fn exec(&self, sql: &str) -> Result<(), SqliteFailure> {
-        let c_sql = CString::new(sql).unwrap(); //TODO
+        let c_sql = CString::new(sql).map_err(|_| SqliteFailure {
+            code: SQLITE_ERROR,
+            error_msg: "SQL script contains null bytes".into(),
+        })?;
+
         let code = unsafe {
             sqlite3_exec(
                 self.db,
@@ -93,6 +97,12 @@ impl Connection {
             let (code, error_msg) = unsafe { get_sqlite_failiure(self.db) };
             return Err(SqliteFailure { code, error_msg });
         }
+        Ok(())
+    }
+
+    /// Executes all SQL statements in a string
+    pub fn execute_many_runtime(&self, sql: &str) -> Result<(), SqliteFailure> {
+        self.exec(sql)?;
         Ok(())
     }
 

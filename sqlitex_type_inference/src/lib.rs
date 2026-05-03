@@ -68,7 +68,7 @@ pub fn validate_create_table_types(sql: &str) -> Result<(), String> {
                         col.data_type, col.name
                     )
                 })?;
-                
+
                 // Translate valid sqlite type aliases into their STRICT-compliant equivalents for helpful compiler errors.
                 if is_strict {
                     let type_str = col.data_type.to_string().to_uppercase();
@@ -362,4 +362,10 @@ pub fn rewrite_bool_columns(sql: &str) -> Result<String, String> {
         .map(|s| s.to_string())
         .collect::<Vec<String>>()
         .join(";\n"))
+}
+
+pub fn validate_sql_file_syntax(sql: &str) -> Result<(), String> {
+    Parser::parse_sql(&SQLiteDialect {}, sql)
+        .map_err(|e| format!("Invalid SQL syntax in schema file: {}", e))?;
+    Ok(())
 }
