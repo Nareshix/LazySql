@@ -853,6 +853,21 @@ fn expand(
 
     item_struct.vis = parse_quote!(pub);
 
+    let transaction_doc = r#"Executes multiple database operations inside a single transaction.
+
+If the closure returns `Ok`, the transaction is committed.
+
+If the closure returns `Err`, the transaction is rolled back.
+
+# Example
+
+```rust
+db.transaction(|tx| {
+    tx.insert_user("Alice")?;
+    tx.insert_post("Hello")?;
+    Ok(())
+})?;"#;
+
     Ok(quote! {
         #[doc(hidden)]
         mod #mod_name {
@@ -873,6 +888,7 @@ fn expand(
                 }
 
 
+    #[doc = #transaction_doc]
     pub fn transaction<T, F>(&mut self, f: F) -> Result<T, sqlitex::errors::Error>
     where
         F: FnOnce(&mut Self) -> Result<T, sqlitex::errors::Error>,

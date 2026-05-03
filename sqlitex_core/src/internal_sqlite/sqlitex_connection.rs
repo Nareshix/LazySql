@@ -76,7 +76,7 @@ impl Connection {
         }
     }
 
-    /// Executes all SQL statements in a string. Alias to `execute_many_runtime`. avoid using this as it will be deprecated soon. TODO
+    /// Executes all SQL statements in a string. Useful for running mulit chain sql stmts. Alias to `execute_many_runtime`. avoid using this as it will be deprecated soon. TODO
     // Do not delete this function for now. many macros depend on this function
     pub fn exec(&self, sql: &str) -> Result<(), SqliteFailure> {
         let c_sql = CString::new(sql).map_err(|_| SqliteFailure {
@@ -101,12 +101,14 @@ impl Connection {
         Ok(())
     }
 
-    /// Executes all SQL statements in a string
+    /// Executes all SQL statements in a string. Useful for running mulit chain sql stmts.
     pub fn execute_many_runtime(&self, sql: &str) -> Result<(), SqliteFailure> {
         self.exec(sql)?;
         Ok(())
     }
 
+    /// Use query_runtime for running SELECT statements.
+    /// Chaining of multiple sql queries via `;` are not allowed
     pub fn query_runtime(&self, sql: &str) -> Result<DynamicRows, SqliteFailure> {
         let mut stmt = std::ptr::null_mut();
         unsafe {
@@ -128,6 +130,9 @@ impl Connection {
         }
     }
 
+    /// Use execute_runtime for write statements (CREATE, INSERT, UPDATE, DELETE, etc.)
+    ///
+    /// returns number of rows modified if successful
     pub fn execute_runtime(&self, sql: &str) -> Result<u64, SqliteFailure> {
         let mut stmt = std::ptr::null_mut();
 
@@ -152,6 +157,19 @@ impl Connection {
         }
     }
 
+    /// Executes multiple database operations inside a single transaction.
+    ///
+    /// If the closure returns `Ok`, the transaction is committed.
+    ///
+    /// If the closure returns `Err`, the transaction is rolled back.
+    ///
+    /// # Example
+    ///
+    /// db.transaction(|tx| {
+    ///     tx.insert_user("Alice")?;
+    ///     tx.insert_post("Hello")?;
+    ///     Ok(())
+    /// })?;
     pub fn transaction<T, F>(&self, f: F) -> Result<T, Error>
     where
         F: FnOnce(&Self) -> Result<T, Error>,
