@@ -210,6 +210,13 @@ fn expand(
             ));
         }
 
+        if ident == "transaction_immediate" {
+            return Err(syn::Error::new(
+                ident.span(),
+                "`transaction_immediate` is a reserved keyword. Rename this field to something else.",
+            ));
+        }
+
         // `init` method is reserved when pointing to an external sql file
         if ident == "init" && db_path_lit.is_some() && db_path_lit.unwrap().value().ends_with(".sql") {
             return Err(syn::Error::new(
@@ -871,6 +878,30 @@ fn expand(
         F: FnOnce(&mut Self) -> Result<T, sqlitex::errors::Error>,
     {
         self.__db.exec("BEGIN")
+            .map_err(sqlitex::errors::Error::from)?;
+
+        let result = f(self);
+
+        match result {
+            Ok(val) => {
+                if let Err(e) = self.__db.exec("COMMIT") {
+                    return Err(sqlitex::errors::Error::from(e));
+                }
+                Ok(val)
+            }
+            Err(e) => {
+                // Attempt rollback, ignoring failure since we are already erroring
+                let _ = self.__db.exec("ROLLBACK");
+                Err(e)
+            }
+        }
+    }
+
+        pub fn transaction_immediate<T, F>(&mut self, f: F) -> Result<T, sqlitex::errors::Error>
+    where
+        F: FnOnce(&mut Self) -> Result<T, sqlitex::errors::Error>,
+    {
+        self.__db.exec("BEGIN IMMEDIATE")
             .map_err(sqlitex::errors::Error::from)?;
 
         let result = f(self);
