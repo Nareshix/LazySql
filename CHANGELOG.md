@@ -3,7 +3,7 @@
 follows `yyyy-mm-dd` format and can have
 headers of
 
-`Added`, `Migration`/`Breaking Changes`, `Changed`, `Deprecated`, `Removed`, `Fixed`, `Security`, `Internal`
+exhaustive but some ideas: `Added`, `Migration`/`Breaking Changes`, `Changed`, `Deprecated`, `Removed`, `Fixed`, `Security`, `Internal`
 
 ## [0.3.0/1.0.0] - 2026-05-03
 
