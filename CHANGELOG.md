@@ -3,32 +3,36 @@
 follows `yyyy-mm-dd` format and can have
 headers of
 
-exhaustive but some ideas: `Added`, `Migration`/`Breaking Changes`, `Changed`, `Deprecated`, `Removed`, `Fixed`, `Security`, `Internal`
+non-exhaustive but some ideas: `Added`, `Migration`/`Breaking Changes`, `Changed`, `Deprecated`, `Removed`, `Fixed`, `Security`, `Internal`
 
 ## [0.3.0/1.0.0] - 2026-05-03
 
 ### Added
 
-- compile time checks for virtual tables are not supported. Added this specific error for better clarity.
 - added `execute_batch()` where we can run multiple chained sql statements (via `;`) at runtime.
 - added `_many` methods for write statements to easily have bulk operation without resorting to transactions
 
+- Generates an `init()` method if you are connecting via an external sql file. This allows us to easily run whatever is defined in that sql file.
+- Generates a `open_connected_db()` method if you are connecting via an external sqlite database. This allows us to easily connect to the database after naming it at macro level.
+- Nested transactions are now supported
+
+
+
+
+### Fixed
+- compile time checks for virtual tables are not supported. Added this specific error for better clarity.
 - more robust error handling and suggestions for STRICT Table to get maximum benefits of this library. It will auto detect types that are valid but invalid in STRICT table and will suggest the correct type. It will also suggest using `CHECK (col in (0 or 1))` if you want to get `bool` type safety
-- Generates an `init()` method if you are connecting via an external sql file. This allows to easily run whatever is defined in that sql file.
 - doc comments for most commonly used functions are written deatilly
-- (ongoing) fixing the nested tx bug, which also includes not being able to use _many inside tx as htey both intenrally use t (nested BEGIN COMMIT are illegal in sqlite). after finsih document it as well
 
-### Changes
+- `CREATE TABLE` detection is now more robust by using AST parsing instead of string matching.
 
-- All transactions starts in `IMMEDIATE` mode instead of `DEFERRED` mode. There is practically no differenece in a single connection, but it is more reliable and faster in multithreaded situation
+
+### Breaking Changes
+
 - fn name changes
   1. `execute_runtime()` → `execute()`
   2. `query_runtime` → `query()`
 
-
-### Fixed
-
-- `CREATE TABLE` detection is now more robust by using AST parsing instead of string matching.
 
 ### Internal
 
