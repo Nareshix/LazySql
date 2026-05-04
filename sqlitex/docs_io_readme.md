@@ -103,20 +103,21 @@ struct App { ... }
 ```
 
 `init` method is generated automatically and becomes a reserved keyword. You can use it to run all the sql stmts in the file given.
+
 For example
 
 ```rust
 #[sqlitex("schema.sql")]
 struct App {
-    add_user: sql!("INSERT INTO users (username) VALUES (?)"),
-    get_all: sql!("SELECT * FROM users"),
+    //...
 }
 fn main() {
     let conn = Connection::open_memory().unwrap();
     let mut db = App::new(conn);
 
     // init is auto generated when we connect to an external sql file.
-    // by running this, it will run all the sql queries on that file, which in this case is `schema.sql`
+    // by running this, it will run all the sql queries on that file,
+    //which in this case is `schema.sql`
     db.init()?;
 
     //...
@@ -147,7 +148,9 @@ For example,
 use sqlitex::sqlitex;
 
 #[sqlitex("test.db")]
-struct Db {}
+struct Db {
+    //...
+}
 
 fn main() {
 
@@ -194,15 +197,16 @@ sql!("SELECT price::text FROM items")
 
 ### BLOB, Transactions, Runtime options etc.
 
-They all are in the examples folder in github. They are short, simple and self-explanatory. https://github.com/Nareshix/sqlitex/tree/main/examples
+They all are in the [examples](https://github.com/Nareshix/sqlitex/tree/main/examples) folder in github. They are short, simple and self-explanatory.
 
 ### `sql_escape_hatch!`
 
-`#[sqlitex]` not only brings `sql!()` macro, but also `sql_escape_hatch!()`. It is used for stmts that compiles fine at runtime but fails at compile time. This is almost never an issue in practice. For more info you can read [the section below](#why-sql_escape_hatch-was-created)
+`#[sqlitex]` not only brings `sql!()` macro, but also `sql_escape_hatch!()`. It is used for stmts that compiles fine at runtime but fails at compile time, and you still want to get that compile time benefits. This is almost never an issue in practice. For more info you can read [the section below](#why-sql_escape_hatch-was-created)
 
 you will most likely **never** need to use this.
 
 #### How to use `sql_escape_hatch!`
+The usage is very similar to how  [rusqlite](https://github.com/rusqlite/rusqlite) works except that you get compile time benefits as well.
 
 ##### a. `SELECT` statements
 
