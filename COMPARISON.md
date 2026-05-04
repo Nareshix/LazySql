@@ -3,27 +3,27 @@
 equivalent code comparison can be found below. This is purely a **sqlite** comparison
 
 ## Feature Comparison
-| | sqlitex | rusqlite | sqlx |
-|---|---|---|---|
-| Compile-time checks | ✅ | ❌ | ✅ |
-|Speed|Fast by default. Automatically caches all preparred statements. It also applies [optimal pragma settings](./sqlitex/Documentation.md#default-pragma-settings) by default|Fast with configuration|Fast (not tested)|
-| Auto type inference | ✅ | ❌ (manual) | ❌ (manual) |
-| Async support* | ❌ | ❌ | ✅ |
-| No live DB needed for compile-time checks | ✅ | — | ❌ |
-| Row mapping | Auto-generated | Manual | Manual |
-| API style | Declarative | Imperative | Query macros |
-| Bulk operations api| ✅ (`_many` auto-generated) | ❌ | ❌ |
-| Bool type support | ✅ | ❌ (0/1 manually) | not tested |
-|postgres `::` for type casting | ✅  | ❌ | ❌ |
-|maturity | newer  | battle tested | battle tested |
 
-
+|                                           | sqlitex                                                                                                                                                                  | rusqlite                | sqlx              |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------- | ----------------- |
+| Compile-time checks                       | ✅                                                                                                                                                                       | ❌                      | ✅                |
+| Speed                                     | Fast by default. Automatically caches all preparred statements. It also applies [optimal pragma settings](./sqlitex/Documentation.md#default-pragma-settings) by default | Fast with configuration | Fast (not tested) |
+| Auto type inference                       | ✅                                                                                                                                                                       | ❌ (manual)             | ❌ (manual)       |
+| Async support\*                           | ❌                                                                                                                                                                       | ❌                      | ✅                |
+| No live DB needed for compile-time checks | ✅                                                                                                                                                                       | —                       | ❌                |
+| Row mapping                               | Auto-generated                                                                                                                                                           | Manual                  | Manual            |
+| API style                                 | Declarative                                                                                                                                                              | Imperative              | Query macros      |
+| Bulk operations api                       | ✅ (`_bulk` auto-generated)                                                                                                                                              | ❌                      | ❌                |
+| Bool type support                         | ✅                                                                                                                                                                       | ❌ (0/1 manually)       | not tested        |
+| postgres `::` for type casting            | ✅                                                                                                                                                                       | ❌                      | ❌                |
+| maturity                                  | newer                                                                                                                                                                    | battle tested           | battle tested     |
 
 \* even though `sqlitex` and `rusqlite` are sync only, you can wrap the calls in `tokio::task::spawn_blocking`.
 
 # Code Comparison
 
 ## Sqlitex
+
 ```rust
 use sqlitex::{Connection, sqlitex};
 
@@ -61,8 +61,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // prints out "0, Alice, true"
 }
 ```
+
 ## Sqlx
-Note:  you need to set the DATABASE_URL environment variable at build time to get compile time checks for `sqlx`
+
+Note: you need to set the DATABASE_URL environment variable at build time to get compile time checks for `sqlx`
 
 ```rust
 use sqlx::SqlitePool;

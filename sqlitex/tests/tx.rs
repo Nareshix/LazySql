@@ -1,10 +1,11 @@
-
 #[warn(unused)]
 use sqlitex::sqlitex;
 
 #[sqlitex]
 pub struct NestedTxDao {
-    create_table: sql!("CREATE TABLE IF NOT EXISTS test (id INTEGER PRIMARY KEY NOT NULL, val TEXT NOT NULL)"),
+    create_table: sql!(
+        "CREATE TABLE IF NOT EXISTS test (id INTEGER PRIMARY KEY NOT NULL, val TEXT NOT NULL)"
+    ),
     insert: sql!("INSERT INTO test (id, val) VALUES (?, ?)"),
     count: sql!("SELECT COUNT(*) as count FROM test"),
     clear: sql!("DELETE FROM test"),
@@ -47,12 +48,12 @@ mod nested_tests {
     }
 
     #[test]
-    fn test_insert_many_inside_macro_tx() -> Result<(), Box<dyn std::error::Error>> {
+    fn test_insert_bulk_inside_macro_tx() -> Result<(), Box<dyn std::error::Error>> {
         let (mut db, _) = setup();
 
         db.transaction(|tx| {
             tx.insert(1, "Singular insert")?;
-            tx.insert_many(&[
+            tx.insert_bulk(&[
                 (2, "Batch item 1".to_string()),
                 (3, "Batch item 2".to_string()),
             ])?;
@@ -116,10 +117,7 @@ mod nested_tests {
 
                 runtime_conn.transaction(|conn| {
                     conn.execute("INSERT INTO test (id, val) VALUES (3, 'L3')")?;
-                    t2.insert_many(&[
-                        (4, "L4A".to_string()),
-                        (5, "L4B".to_string()),
-                    ])?;
+                    t2.insert_bulk(&[(4, "L4A".to_string()), (5, "L4B".to_string())])?;
                     Ok(())
                 })?;
                 Ok(())
@@ -131,5 +129,4 @@ mod nested_tests {
         assert_eq!(count, 5);
         Ok(())
     }
-
 }

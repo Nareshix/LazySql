@@ -460,8 +460,8 @@ fn expand(
                     }
                 });
 
-                // generate _many method
-                let many_ident = quote::format_ident!("{}_many", ident);
+                // generate _bulk method
+                let many_ident = quote::format_ident!("{}_bulk", ident);
 
                 let mut many_owned_types = Vec::new();
                 let mut many_bind_calls = Vec::new();
@@ -514,7 +514,7 @@ fn expand(
                     });
                 }
 
-                let (item_type, final_many_bind_calls) = if binding_types.len() == 1 {
+                let (item_type, final_bulk_bind_calls) = if binding_types.len() == 1 {
                     let bind_type = &binding_types[0];
                     let single_bind_expr = if bind_type.nullable {
                         match bind_type.base_type {
@@ -561,7 +561,7 @@ let bulk = [
     (2.0, "Charlie".to_string(), true),
 ];
 
-db.{}_many(&bulk)?;
+db.{}_bulk(&bulk)?;
 ```"#,
                     ident, ident
                 );
@@ -599,7 +599,7 @@ db.{}_many(&bulk)?;
                                 conn: self.__db.db,
                             };
 
-                            #(#final_many_bind_calls)*
+                            #(#final_bulk_bind_calls)*
 
                             if let Err(__e) = preparred_statement.step() {
                                 if is_outermost {
