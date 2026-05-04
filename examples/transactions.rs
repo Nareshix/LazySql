@@ -1,5 +1,7 @@
 //! Note: you cannot name a field called `transaction` in the struct since its a reserved method name.
 //! Failiure to do so will result in a compile time error
+//!
+//! Note You can have nested transactions
 
 use sqlitex::{Connection, sqlitex};
 
@@ -29,8 +31,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         let count = tx.count()?.all()?;
 
-        Ok(count) // if you are not returning anything, u should return it as `Ok(())`
-    })?;
+        Ok(count)
+        })?;
 
     println!("{:?}", results[0].count); // prints out '2'
 

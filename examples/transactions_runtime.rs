@@ -1,3 +1,5 @@
+//! Note You can have nested transactions
+
 use sqlitex::Connection;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
