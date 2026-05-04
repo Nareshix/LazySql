@@ -118,9 +118,10 @@ impl SqliteHandle {
             };
 
             if rc != SQLITE_OK {
+                let (_, msg) = get_sqlite_failiure(db);
+
                 // raii to work. so it auto closes
                 let _ = SqliteHandle { db };
-                let (_, msg) = get_sqlite_failiure(db); // assuming this function exists
                 return Err(format!("Failed to open DB: {}", msg));
             }
 
