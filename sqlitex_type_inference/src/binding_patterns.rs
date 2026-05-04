@@ -1350,10 +1350,17 @@ fn traverse_set_expr(
                         subquery, alias, ..
                     } => {
                         traverse_query(subquery, outer_scope, all_tables, results)?;
-                        // If it has an alias, register output columns
-                        // of the subquery here, but for param inference, just visiting the subquery is crucial.
                         if let Some(a) = alias {
-                            local_scope_tables.push(a.name.value.clone());
+                            let alias_name = a.name.value.clone();
+                            // Register subquery output columns under the alias so the outer
+                            // WHERE/JOIN can resolve e.g. sub.col or u.uid
+                            if let Ok(sub_cols) = crate::select_patterns::traverse_select_output(
+                                &subquery.body,
+                                current_select_scope,
+                            ) {
+                                current_select_scope.insert(alias_name.clone(), sub_cols);
+                            }
+                            local_scope_tables.push(alias_name);
                         }
                     }
                     sqlparser::ast::TableFactor::TableFunction { expr, alias, .. } => {
