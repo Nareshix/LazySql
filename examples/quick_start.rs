@@ -27,10 +27,13 @@ struct AppDatabase {
         )
     "),
 
-    // postgres `::` type casting is supported. Alternatively u can use `CAST AS` syntax
+    // You can add the `///` for doc comments for the methods. You can hover above them to see it
+    // alongside the generated sql code
+
+    /// postgres `::` type casting is supported. Alternatively u can use `CAST AS` syntax
     add_user: sql!("INSERT INTO users (id, username, is_active) VALUES (?::REAL, ?, ?);"),
 
-    // or `id::REAL` instead of `CAST (id AS REAL)`
+    /// or `id::REAL` instead of `CAST (id AS REAL)`
     get_active_users: sql!("SELECT CAST (id AS REAL), username, is_active as active FROM users WHERE is_active = ?"),
 }
 
