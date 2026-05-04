@@ -20,6 +20,7 @@ non-exhaustive but some ideas: `Added`, `Migration`/`Breaking Changes`, `Changed
 - compile time checks for virtual tables are not supported. Added this specific error for better clarity.
 - more robust error handling and suggestions for STRICT Table to get maximum benefits of this library. It will auto detect types that are valid but invalid in STRICT table and will suggest the correct type. It will also suggest using `CHECK (col in (0 or 1))` if you want to get `bool` type safety
 - doc comments for most commonly used functions are written deatilly
+- panic within transaction now rollback Database, preventing it from deadlock
 
 - `CREATE TABLE` detection is now more robust by using AST parsing instead of string matching.
 
