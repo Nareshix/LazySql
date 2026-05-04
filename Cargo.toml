@@ -5,7 +5,6 @@ members = [
     "sqlitex_core",
     "sqlitex_macros",
     "sqlitex_type_inference",
-    "tests"
 ]
 
 [workspace.package]

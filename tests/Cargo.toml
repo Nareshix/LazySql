@@ -1,8 +1,0 @@
-[package]
-name = "tests"
-version.workspace = true
-edition.workspace = true
-publish = false
-
-[dependencies]
-sqlitex.workspace = true
