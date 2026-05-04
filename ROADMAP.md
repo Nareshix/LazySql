@@ -1,3 +1,6 @@
+
+
+no need to add anything to changelog anymore. can prep tag release from there
 Must fix:
 
 #17 Transaction Panic Guard — it's a bug, ship it fixed
@@ -7,6 +10,10 @@ Should do:
 
 #20 Document the clone connection pattern — 10 mins, just a doc comment
 #5 Separate suggestions from errors — polish, makes error messages cleaner
+
+
+
+
 
 Push to 0.4.0:
 
