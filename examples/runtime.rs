@@ -1,4 +1,5 @@
 use sqlitex::Connection;
+use sqlitex::traits::dynamic::Value;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let conn = Connection::open_memory()?;
@@ -30,19 +31,36 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // which in this case is ["id", "name", "price", "in_stock"]
     println!("All column names: {:?}", results.column_names);
 
-    // row_result is an iterator
+    // row_result is an iterator. Columns are accessed by index, matching the SELECT order.
+    // Match on the Value enum to handle each column's type
     for row_result in results {
         let row = row_result?;
-        for value in row {
-            // or u could do value.as_string(), value.as_f64(), value.as_i64(), etc. to convert the enum to specific type
-            print!("{:?}\n ", value);
-        }
+
+        let id = match row[0] {
+            Value::Integer(i) => i,
+            _ => 0,
+        };
+        let name = row[1].as_string();
+
+        let price = match row[2] {
+            Value::Real(f) => f,
+            Value::Null => 0.0,
+            _ => 0.0,
+        };
+        let in_stock = match row[3] {
+            Value::Integer(i) => i != 0,
+            Value::Null => false,
+            _ => false,
+        };
+
+        println!("id={id}, name={name}, price={price}, in_stock={in_stock}");
     }
 
     // u can use helper functions like first() or all() to get a vector of rows.
     let _first_row = conn
         .query("SELECT name, price FROM products WHERE id = 1")?
         .first()?; // or .all()? for all rows
+
 
     Ok(())
 }
