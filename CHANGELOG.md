@@ -4,6 +4,9 @@
 
 non-exhaustive but some ideas: `Added`, `Migration`/`Breaking Changes`, `Changed`, `Deprecated`, `Removed`, `Fixed`, `Security`, `Internal`
 
+## [0.3.1] - 05-05-2026
+`pretty-assertion` crate is now a dev dependency, thus won't be included in final binary
+
 ## [0.3.0] - 05-05-2026
 
 ### Added
