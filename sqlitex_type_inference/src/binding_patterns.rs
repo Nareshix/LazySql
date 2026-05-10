@@ -1,6 +1,6 @@
-use crate::expr::{BaseType, Type, evaluate_expr_type};
+use crate::expr::{evaluate_expr_type, BaseType, Type};
 use crate::pg_cast_syntax_to_sqlite;
-use crate::table::{ColumnInfo, get_table_names, normalize_identifier, normalize_part};
+use crate::table::{get_table_names, normalize_identifier, normalize_part, ColumnInfo};
 use sqlparser::ast::{
     BinaryOperator, DataType, Expr, FunctionArg, FunctionArgExpr, FunctionArguments, SetExpr,
     Spanned, Statement,
@@ -8,6 +8,20 @@ use sqlparser::ast::{
 use sqlparser::dialect::SQLiteDialect;
 use sqlparser::parser::Parser;
 use std::collections::HashMap;
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct BindingParam {
+    pub data_type: Type,
+    pub name: String,
+}
+
+fn extract_name_hint(expr: &Expr) -> Option<String> {
+    match expr {
+        Expr::Identifier(ident) => Some(normalize_identifier(ident)),
+        Expr::CompoundIdentifier(idents) => idents.last().map(normalize_identifier),
+        _ => None,
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Location {
@@ -53,7 +67,7 @@ fn err_from_expr(expr: &impl Spanned, msg: impl Into<String>) -> InferenceError 
 pub fn get_type_of_binding_parameters(
     sql: &str,
     all_tables: &HashMap<String, Vec<ColumnInfo>>,
-) -> Result<Vec<Type>, InferenceError> {
+) -> Result<Vec<BindingParam>, InferenceError> {
     match get_type_of_binding_parameters_internal(sql, all_tables) {
         Ok(res) => Ok(res),
         Err(e) => {
@@ -69,7 +83,7 @@ pub fn get_type_of_binding_parameters(
 fn get_type_of_binding_parameters_internal(
     sql: &str,
     all_tables: &HashMap<String, Vec<ColumnInfo>>,
-) -> Result<Vec<Type>, InferenceError> {
+) -> Result<Vec<BindingParam>, InferenceError> {
     let ast = Parser::parse_sql(&SQLiteDialect {}, sql).map_err(|e| InferenceError {
         start: Location { line: 1, column: 1 },
         end: Location { line: 1, column: 1 },
@@ -105,6 +119,7 @@ fn get_type_of_binding_parameters_internal(
                     all_tables,
                     &mut results,
                     bool_hint.clone(),
+                    None,
                 )?;
 
                 traverse_returning(
@@ -149,6 +164,7 @@ fn get_type_of_binding_parameters_internal(
                             all_tables,
                             &mut results,
                             hint,
+                            Some(col_name.clone()),
                         )
                         .map_err(|mut e| {
                             e.message = format!(
@@ -170,12 +186,14 @@ fn get_type_of_binding_parameters_internal(
                                     .and_then(|cols| cols.iter().find(|c| c.name == col_name))
                                     .map(|c| c.data_type.clone());
 
+                                let hint_name = name_obj.0.last().map(|p| p.to_string());
                                 traverse_expr(
                                     val_expr,
                                     &table_names,
                                     all_tables,
                                     &mut results,
                                     hint,
+                                    hint_name,
                                 )?;
                             }
                         } else {
@@ -184,6 +202,7 @@ fn get_type_of_binding_parameters_internal(
                                 &table_names,
                                 all_tables,
                                 &mut results,
+                                None,
                                 None,
                             )?;
                         }
@@ -197,6 +216,7 @@ fn get_type_of_binding_parameters_internal(
                     all_tables,
                     &mut results,
                     bool_hint.clone(),
+                    None,
                 )?;
             }
 
@@ -207,11 +227,18 @@ fn get_type_of_binding_parameters_internal(
             });
 
             if let Some(limit_expr) = limit {
-                traverse_expr(limit_expr, &table_names, all_tables, &mut results, int_hint)
-                    .map_err(|mut e| {
-                        e.message = format!("{} in UPDATE LIMIT clause", e.message);
-                        e
-                    })?;
+                traverse_expr(
+                    limit_expr,
+                    &table_names,
+                    all_tables,
+                    &mut results,
+                    int_hint,
+                    Some("limit".to_string()),
+                )
+                .map_err(|mut e| {
+                    e.message = format!("{} in UPDATE LIMIT clause", e.message);
+                    e
+                })?;
             }
 
             if let Some(from_kind) = from {
@@ -223,7 +250,7 @@ fn get_type_of_binding_parameters_internal(
                 for from_table in from_tables {
                     match &from_table.relation {
                         sqlparser::ast::TableFactor::TableFunction { expr, .. } => {
-                            traverse_expr(expr, &table_names, all_tables, &mut results, None)?;
+                            traverse_expr(expr, &table_names, all_tables, &mut results, None, None)?;
                         }
                         sqlparser::ast::TableFactor::Derived { subquery, .. } => {
                             traverse_query(subquery, &table_names, all_tables, &mut results)?;
@@ -234,7 +261,14 @@ fn get_type_of_binding_parameters_internal(
                     for join in &from_table.joins {
                         match &join.relation {
                             sqlparser::ast::TableFactor::TableFunction { expr, .. } => {
-                                traverse_expr(expr, &table_names, all_tables, &mut results, None)?;
+                                traverse_expr(
+                                    expr,
+                                    &table_names,
+                                    all_tables,
+                                    &mut results,
+                                    None,
+                                    None,
+                                )?;
                             }
                             sqlparser::ast::TableFactor::Derived { subquery, .. } => {
                                 traverse_query(subquery, &table_names, all_tables, &mut results)?;
@@ -260,6 +294,7 @@ fn get_type_of_binding_parameters_internal(
                                 all_tables,
                                 &mut results,
                                 bool_hint.clone(),
+                                None,
                             )
                             .map_err(|mut e| {
                                 e.message =
@@ -305,8 +340,19 @@ fn get_type_of_binding_parameters_internal(
                         for row in &values.rows {
                             for (idx, expr) in row.iter().enumerate() {
                                 let hint = expected_types.get(idx).cloned().flatten();
-                                traverse_expr(expr, &table_names, all_tables, &mut results, hint)
-                                    .map_err(|mut e| {
+                                let col_name_hint = insert_node
+                                    .columns
+                                    .get(idx)
+                                    .map(|ident| normalize_identifier(ident));
+                                traverse_expr(
+                                    expr,
+                                    &table_names,
+                                    all_tables,
+                                    &mut results,
+                                    hint,
+                                    col_name_hint,
+                                )
+                                .map_err(|mut e| {
                                     e.message = format!(
                                         "{} in INSERT value at column index {}",
                                         e.message, idx
@@ -319,6 +365,10 @@ fn get_type_of_binding_parameters_internal(
                     SetExpr::Select(select) => {
                         for (idx, item) in select.projection.iter().enumerate() {
                             let hint = expected_types.get(idx).cloned().flatten();
+                            let col_name_hint = insert_node
+                                .columns
+                                .get(idx)
+                                .map(|ident| normalize_identifier(ident));
                             match item {
                                 sqlparser::ast::SelectItem::UnnamedExpr(expr)
                                 | sqlparser::ast::SelectItem::ExprWithAlias { expr, .. } => {
@@ -328,13 +378,21 @@ fn get_type_of_binding_parameters_internal(
                                         all_tables,
                                         &mut results,
                                         hint,
+                                        col_name_hint,
                                     )?;
                                 }
                                 _ => {}
                             }
                         }
                         if let Some(selection) = &select.selection {
-                            traverse_expr(selection, &table_names, all_tables, &mut results, None)?;
+                            traverse_expr(
+                                selection,
+                                &table_names,
+                                all_tables,
+                                &mut results,
+                                None,
+                                None,
+                            )?;
                         }
                         traverse_returning(
                             &insert_node.returning,
@@ -372,6 +430,7 @@ fn get_type_of_binding_parameters_internal(
                         all_tables,
                         &mut results,
                         hint,
+                        Some(col_name.clone()),
                     )
                     .map_err(|mut e| {
                         e.message =
@@ -386,6 +445,7 @@ fn get_type_of_binding_parameters_internal(
                         all_tables,
                         &mut results,
                         bool_hint.clone(),
+                        None,
                     )?;
                 }
             }
@@ -405,8 +465,9 @@ fn traverse_expr(
     expr: &Expr,
     table_names: &Vec<String>,
     all_tables: &HashMap<String, Vec<ColumnInfo>>,
-    results: &mut Vec<Type>,
+    results: &mut Vec<BindingParam>,
     parent_hint: Option<Type>,
+    name_hint: Option<String>,
 ) -> Result<(), InferenceError> {
     match expr {
         Expr::Subquery(query) => {
@@ -424,7 +485,7 @@ fn traverse_expr(
             subquery,
             ..
         } => {
-            traverse_expr(inner, table_names, all_tables, results, None)?;
+            traverse_expr(inner, table_names, all_tables, results, None, None)?;
             traverse_query(subquery, table_names, all_tables, results)?;
             Ok(())
         }
@@ -479,7 +540,11 @@ fn traverse_expr(
                     ));
                 }
 
-                results.push(t);
+                let base_name = name_hint.unwrap_or_else(|| "arg".to_string());
+                results.push(BindingParam {
+                    data_type: t,
+                    name: base_name,
+                });
             }
             Ok(())
         }
@@ -489,6 +554,7 @@ fn traverse_expr(
             escape_char,
             ..
         } => {
+            let target_name = extract_name_hint(target);
             traverse_expr(
                 target,
                 table_names,
@@ -499,6 +565,7 @@ fn traverse_expr(
                     nullable: true,
                     contains_placeholder: false,
                 }),
+                None,
             )
             .map_err(|mut e| {
                 e.message = format!("{} in LIKE target expression", e.message);
@@ -515,6 +582,7 @@ fn traverse_expr(
                     nullable: true,
                     contains_placeholder: false,
                 }),
+                target_name.or_else(|| name_hint.clone()),
             )
             .map_err(|mut e| {
                 e.message = format!("{} in LIKE pattern", e.message);
@@ -533,6 +601,7 @@ fn traverse_expr(
                         nullable: true,
                         contains_placeholder: false,
                     }),
+                    None,
                 )
                 .map_err(|mut e| {
                     e.message = format!("{} in LIKE escape char", e.message);
@@ -543,7 +612,7 @@ fn traverse_expr(
         }
 
         Expr::IsNull(inner) | Expr::IsNotNull(inner) => {
-            traverse_expr(inner, table_names, all_tables, results, None)?;
+            traverse_expr(inner, table_names, all_tables, results, None, None)?;
             Ok(())
         }
 
@@ -561,6 +630,7 @@ fn traverse_expr(
                     nullable: false,
                     contains_placeholder: false,
                 }),
+                None,
             )?;
             Ok(())
         }
@@ -575,7 +645,14 @@ fn traverse_expr(
                 _ => parent_hint,
             };
 
-            traverse_expr(inner, table_names, all_tables, results, child_hint)?;
+            traverse_expr(
+                inner,
+                table_names,
+                all_tables,
+                results,
+                child_hint,
+                name_hint,
+            )?;
             Ok(())
         }
 
@@ -640,14 +717,34 @@ fn traverse_expr(
                 e
             };
 
-            traverse_expr(left, table_names, all_tables, results, left_hint).map_err(err_mapper)?;
-            traverse_expr(right, table_names, all_tables, results, right_hint)
-                .map_err(err_mapper)?;
+            let left_name_hint = extract_name_hint(right).or_else(|| name_hint.clone());
+            let right_name_hint = extract_name_hint(left).or_else(|| name_hint.clone());
+
+            traverse_expr(
+                left,
+                table_names,
+                all_tables,
+                results,
+                left_hint,
+                left_name_hint,
+            )
+            .map_err(err_mapper)?;
+            traverse_expr(
+                right,
+                table_names,
+                all_tables,
+                results,
+                right_hint,
+                right_name_hint,
+            )
+            .map_err(err_mapper)?;
 
             Ok(())
         }
 
-        Expr::Nested(inner) => traverse_expr(inner, table_names, all_tables, results, parent_hint),
+        Expr::Nested(inner) => {
+            traverse_expr(inner, table_names, all_tables, results, parent_hint, name_hint)
+        }
 
         Expr::InList {
             expr: match_expr,
@@ -683,18 +780,28 @@ fn traverse_expr(
                 e
             };
 
+            let hint_name = extract_name_hint(match_expr).or_else(|| name_hint.clone());
+
             traverse_expr(
                 match_expr,
                 table_names,
                 all_tables,
                 results,
                 common_type.clone(),
+                name_hint.clone(),
             )
             .map_err(err_mapper)?;
 
             for item in list {
-                traverse_expr(item, table_names, all_tables, results, common_type.clone())
-                    .map_err(err_mapper)?;
+                traverse_expr(
+                    item,
+                    table_names,
+                    all_tables,
+                    results,
+                    common_type.clone(),
+                    hint_name.clone(),
+                )
+                .map_err(err_mapper)?;
             }
 
             Ok(())
@@ -726,15 +833,31 @@ fn traverse_expr(
                 None
             };
 
+            let hint_name = extract_name_hint(match_expr).or_else(|| name_hint.clone());
             traverse_expr(
                 match_expr,
                 table_names,
                 all_tables,
                 results,
                 context.clone(),
+                name_hint,
             )?;
-            traverse_expr(low, table_names, all_tables, results, context.clone())?;
-            traverse_expr(high, table_names, all_tables, results, context)?;
+            traverse_expr(
+                low,
+                table_names,
+                all_tables,
+                results,
+                context.clone(),
+                hint_name.clone(),
+            )?;
+            traverse_expr(
+                high,
+                table_names,
+                all_tables,
+                results,
+                context,
+                hint_name,
+            )?;
             Ok(())
         }
 
@@ -793,14 +916,20 @@ fn traverse_expr(
             };
 
             let parent_span = expr.span();
-            traverse_expr(inner, table_names, all_tables, results, target_type).map_err(
-                |mut e| {
-                    e.start = parent_span.start.into();
-                    e.end = parent_span.end.into();
-                    e.message = format!("{} inside CAST", e.message);
-                    e
-                },
-            )?;
+            traverse_expr(
+                inner,
+                table_names,
+                all_tables,
+                results,
+                target_type,
+                name_hint,
+            )
+            .map_err(|mut e| {
+                e.start = parent_span.start.into();
+                e.end = parent_span.end.into();
+                e.message = format!("{} inside CAST", e.message);
+                e
+            })?;
             Ok(())
         }
 
@@ -834,7 +963,7 @@ fn traverse_expr(
             }
 
             let operand_hint = if let Some(op_expr) = operand {
-                traverse_expr(op_expr, table_names, all_tables, results, None).map_err(
+                traverse_expr(op_expr, table_names, all_tables, results, None, None).map_err(
                     |mut e| {
                         e.message = format!("{} in CASE operand '{}'", e.message, op_expr);
                         e
@@ -854,11 +983,18 @@ fn traverse_expr(
                     contains_placeholder: false,
                 }));
 
-                traverse_expr(&cond.condition, table_names, all_tables, results, when_hint)
-                    .map_err(|mut e| {
-                        e.message = format!("{} in 'WHEN {}'", e.message, cond.condition);
-                        e
-                    })?;
+                traverse_expr(
+                    &cond.condition,
+                    table_names,
+                    all_tables,
+                    results,
+                    when_hint,
+                    None,
+                )
+                .map_err(|mut e| {
+                    e.message = format!("{} in 'WHEN {}'", e.message, cond.condition);
+                    e
+                })?;
 
                 if let Err(mut e) = traverse_expr(
                     &cond.result,
@@ -866,6 +1002,7 @@ fn traverse_expr(
                     all_tables,
                     results,
                     result_hint.clone(),
+                    name_hint.clone(),
                 ) {
                     if result_hint.is_none() {
                         e.start = case_span.start.into();
@@ -897,6 +1034,7 @@ fn traverse_expr(
                     all_tables,
                     results,
                     result_hint.clone(),
+                    name_hint.clone(),
                 )
             {
                 if result_hint.is_none() {
@@ -995,12 +1133,12 @@ fn traverse_expr(
                 && let sqlparser::ast::WindowType::WindowSpec(window_spec) = window_type
             {
                 for expr in &window_spec.partition_by {
-                    traverse_expr(expr, table_names, all_tables, results, None)
+                    traverse_expr(expr, table_names, all_tables, results, None, None)
                         .map_err(err_mapper)?;
                 }
 
                 for order in &window_spec.order_by {
-                    traverse_expr(&order.expr, table_names, all_tables, results, None)
+                    traverse_expr(&order.expr, table_names, all_tables, results, None, None)
                         .map_err(err_mapper)?;
                 }
 
@@ -1022,6 +1160,7 @@ fn traverse_expr(
                                         all_tables,
                                         results,
                                         int_hint.clone(),
+                                        None,
                                     )?;
                                 }
                                 _ => {}
@@ -1084,8 +1223,15 @@ fn traverse_expr(
             if let FunctionArguments::List(args_list) = &func.args {
                 for arg in &args_list.args {
                     if let FunctionArg::Unnamed(FunctionArgExpr::Expr(arg_expr)) = arg {
-                        traverse_expr(arg_expr, table_names, all_tables, results, arg_hint.clone())
-                            .map_err(err_mapper)?;
+                        traverse_expr(
+                            arg_expr,
+                            table_names,
+                            all_tables,
+                            results,
+                            arg_hint.clone(),
+                            None,
+                        )
+                        .map_err(err_mapper)?;
                     }
                 }
             }
@@ -1098,7 +1244,7 @@ fn traverse_expr(
                 nullable: true,
                 contains_placeholder: false,
             });
-            traverse_expr(inner, table_names, all_tables, results, hint)?;
+            traverse_expr(inner, table_names, all_tables, results, hint, None)?;
             Ok(())
         }
 
@@ -1118,6 +1264,7 @@ fn traverse_expr(
                     nullable: true,
                     contains_placeholder: false,
                 }),
+                None,
             )?;
 
             if let Some(from_expr) = substring_from {
@@ -1131,6 +1278,7 @@ fn traverse_expr(
                         nullable: true,
                         contains_placeholder: false,
                     }),
+                    None,
                 )?;
             }
 
@@ -1145,6 +1293,7 @@ fn traverse_expr(
                         nullable: true,
                         contains_placeholder: false,
                     }),
+                    None,
                 )?;
             }
             Ok(())
@@ -1161,10 +1310,24 @@ fn traverse_expr(
                 contains_placeholder: false,
             });
 
-            traverse_expr(inner, table_names, all_tables, results, text_hint.clone())?;
+            traverse_expr(
+                inner,
+                table_names,
+                all_tables,
+                results,
+                text_hint.clone(),
+                None,
+            )?;
 
             if let Some(pattern_expr) = trim_what {
-                traverse_expr(pattern_expr, table_names, all_tables, results, text_hint)?;
+                traverse_expr(
+                    pattern_expr,
+                    table_names,
+                    all_tables,
+                    results,
+                    text_hint,
+                    None,
+                )?;
             }
             Ok(())
         }
@@ -1177,7 +1340,7 @@ fn traverse_query(
     query: &sqlparser::ast::Query,
     table_names: &Vec<String>,
     all_tables: &HashMap<String, Vec<ColumnInfo>>,
-    results: &mut Vec<Type>,
+    results: &mut Vec<BindingParam>,
 ) -> Result<(), InferenceError> {
     let mut local_scope = all_tables.clone();
 
@@ -1197,7 +1360,14 @@ fn traverse_query(
         && let sqlparser::ast::OrderByKind::Expressions(exprs) = &order_by_struct.kind
     {
         for order_expr in exprs {
-            traverse_expr(&order_expr.expr, table_names, &local_scope, results, None)?;
+            traverse_expr(
+                &order_expr.expr,
+                table_names,
+                &local_scope,
+                results,
+                None,
+                None,
+            )?;
         }
     }
 
@@ -1216,6 +1386,7 @@ fn traverse_query(
                     all_tables,
                     results,
                     int_hint.clone(),
+                    Some("limit".to_string()),
                 )?;
             }
             if let Some(offset_struct) = offset {
@@ -1225,6 +1396,7 @@ fn traverse_query(
                     all_tables,
                     results,
                     int_hint,
+                    Some("offset".to_string()),
                 )?;
             }
         }
@@ -1324,7 +1496,7 @@ fn traverse_set_expr(
     set_expr: &SetExpr,
     outer_scope: &Vec<String>,
     all_tables: &HashMap<String, Vec<ColumnInfo>>,
-    results: &mut Vec<Type>,
+    results: &mut Vec<BindingParam>,
 ) -> Result<(), InferenceError> {
     let bool_hint = Some(Type {
         base_type: BaseType::Bool,
@@ -1343,7 +1515,7 @@ fn traverse_set_expr(
                 all_tables: &HashMap<String, Vec<ColumnInfo>>,
                 current_select_scope: &mut HashMap<String, Vec<ColumnInfo>>,
                 local_scope_tables: &mut Vec<String>,
-                results: &mut Vec<Type>,
+                results: &mut Vec<BindingParam>,
             ) -> Result<(), InferenceError> {
                 match factor {
                     sqlparser::ast::TableFactor::Table { name, alias, .. } => {
@@ -1386,6 +1558,7 @@ fn traverse_set_expr(
                             local_scope_tables,
                             current_select_scope,
                             results,
+                            None,
                             None,
                         )?;
                         if let Some(a) = alias {
@@ -1451,6 +1624,7 @@ fn traverse_set_expr(
                             &current_select_scope,
                             results,
                             None,
+                            None,
                         )?;
                     }
                     sqlparser::ast::SelectItem::ExprWithAlias { expr, alias } => {
@@ -1460,6 +1634,7 @@ fn traverse_set_expr(
                             &current_select_scope,
                             results,
                             None,
+                            Some(normalize_identifier(alias)),
                         )?;
 
                         let derived_type =
@@ -1486,7 +1661,7 @@ fn traverse_set_expr(
                     joins: &[sqlparser::ast::Join],
                     local_scope_tables: &Vec<String>,
                     current_select_scope: &HashMap<String, Vec<ColumnInfo>>,
-                    results: &mut Vec<Type>,
+                    results: &mut Vec<BindingParam>,
                     bool_hint: Option<Type>,
                 ) -> Result<(), InferenceError> {
                     for join in joins {
@@ -1508,6 +1683,7 @@ fn traverse_set_expr(
                                 current_select_scope,
                                 results,
                                 bool_hint.clone(),
+                                None,
                             )?;
                         }
 
@@ -1558,6 +1734,7 @@ fn traverse_set_expr(
                     &current_select_scope,
                     results,
                     bool_hint.clone(),
+                    None,
                 )?;
             }
 
@@ -1575,6 +1752,7 @@ fn traverse_set_expr(
                         &current_select_scope,
                         results,
                         None,
+                        None,
                     )?;
                 }
             }
@@ -1586,6 +1764,7 @@ fn traverse_set_expr(
                     &current_select_scope,
                     results,
                     bool_hint.clone(),
+                    None,
                 )?;
             }
         }
@@ -1602,7 +1781,7 @@ fn traverse_set_expr(
         SetExpr::Values(values) => {
             for row in &values.rows {
                 for expr in row {
-                    traverse_expr(expr, outer_scope, all_tables, results, None)?;
+                    traverse_expr(expr, outer_scope, all_tables, results, None, None)?;
                 }
             }
         }
@@ -1614,18 +1793,25 @@ fn traverse_returning(
     returning: &Option<Vec<sqlparser::ast::SelectItem>>,
     table_names: &Vec<String>,
     all_tables: &HashMap<String, Vec<ColumnInfo>>,
-    results: &mut Vec<Type>,
+    results: &mut Vec<BindingParam>,
 ) -> Result<(), InferenceError> {
     if let Some(items) = returning {
         for item in items {
             match item {
                 // e.g. RETURNING col + ?
                 sqlparser::ast::SelectItem::UnnamedExpr(expr) => {
-                    traverse_expr(expr, table_names, all_tables, results, None)?;
+                    traverse_expr(expr, table_names, all_tables, results, None, None)?;
                 }
                 // RETURNING col + ? AS new_val
-                sqlparser::ast::SelectItem::ExprWithAlias { expr, .. } => {
-                    traverse_expr(expr, table_names, all_tables, results, None)?;
+                sqlparser::ast::SelectItem::ExprWithAlias { expr, alias } => {
+                    traverse_expr(
+                        expr,
+                        table_names,
+                        all_tables,
+                        results,
+                        None,
+                        Some(normalize_identifier(alias)),
+                    )?;
                 }
                 // RETURNING *
                 _ => {}

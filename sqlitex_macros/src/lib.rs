@@ -384,6 +384,45 @@ fn expand(
                 }
             };
 
+            let mut param_names = Vec::new();
+            let mut used_names = std::collections::HashSet::new();
+            for (i, param) in binding_types.iter().enumerate() {
+                let mut base_name = param.name.clone();
+                if base_name == "arg" || base_name.is_empty() {
+                    base_name = format!("arg_{}", i);
+                }
+
+                // Convert invalid Rust identifier characters to underscores
+                base_name = base_name.replace(|c: char| !c.is_ascii_alphanumeric(), "_");
+
+                // Prevent starting with a number
+                if base_name.chars().next().map_or(false, |c| c.is_ascii_digit()) {
+                    base_name = format!("arg_{}", base_name);
+                }
+
+                // Keep name valid for Rust
+                let is_keyword = matches!(
+                    base_name.as_str(),
+                    "type" | "match" | "let" | "fn" | "struct" | "enum" | "trait" | "impl" | "where"
+                    | "for" | "loop" | "while" | "if" | "else" | "return" | "break" | "continue"
+                    | "mut" | "ref" | "in" | "as" | "use" | "pub" | "const" | "static" | "move"
+                    | "async" | "await" | "dyn" | "self" | "super" | "crate"
+                );
+                if is_keyword {
+                    base_name = format!("{}_arg", base_name);
+                }
+
+                // Deduplicate names: id, id_1, id_2 etc.
+                let mut final_name = base_name.clone();
+                let mut counter = 1;
+                while used_names.contains(&final_name) {
+                    final_name = format!("{}_{}", base_name, counter);
+                    counter += 1;
+                }
+                used_names.insert(final_name.clone());
+                param_names.push(final_name);
+            }
+
             let doc_comment = format!(" \n**SQL**\n```sql\n{}", format_sql(&sql_lit.value()));
 
             field.ty = parse_quote!(sqlitex::internal_sqlite::sqlitex_statement::SqlitexStmt);
@@ -421,8 +460,9 @@ fn expand(
                 let mut method_args = Vec::new();
                 let mut bind_calls = Vec::new();
 
-                for (i, bind_type) in binding_types.iter().enumerate() {
-                    let arg_name = quote::format_ident!("arg_{}", i);
+                for (i, bind_param) in binding_types.iter().enumerate() {
+                    let arg_name = quote::format_ident!("{}", param_names[i]);
+                    let bind_type = &bind_param.data_type;
                     let bind_index = (i + 1) as i32;
 
                     let rust_base_type = match bind_type.base_type {
@@ -485,9 +525,10 @@ fn expand(
                 let mut many_owned_types = Vec::new();
                 let mut many_bind_calls = Vec::new();
 
-                for (i, bind_type) in binding_types.iter().enumerate() {
+                for (i, bind_param) in binding_types.iter().enumerate() {
                     let bind_index = (i + 1) as i32;
                     let tuple_idx = syn::Index::from(i);
+                    let bind_type = &bind_param.data_type;
 
                     let owned_base_type = match bind_type.base_type {
                         BaseType::Integer => quote! { i64 },
@@ -539,7 +580,7 @@ fn expand(
                 }
 
                 let (item_type, final_bulk_bind_calls) = if binding_types.len() == 1 {
-                    let bind_type = &binding_types[0];
+                    let bind_type = &binding_types[0].data_type;
                     let single_bind_expr = if bind_type.nullable {
                         match bind_type.base_type {
                             BaseType::Text => quote! { item.as_deref() },
@@ -870,8 +911,9 @@ if is_single_col && cardinality != QueryCardinality::MaybeMany {
                 let mut method_args = Vec::new();
                 let mut bind_calls = Vec::new();
 
-                for (i, bind_type) in binding_types.iter().enumerate() {
-                    let arg_name = quote::format_ident!("arg_{}", i);
+                for (i, bind_param) in binding_types.iter().enumerate() {
+                    let arg_name = quote::format_ident!("{}", param_names[i]);
+                    let bind_type = &bind_param.data_type;
                     let bind_index = (i + 1) as i32;
 
                     let rust_base_type = match bind_type.base_type {

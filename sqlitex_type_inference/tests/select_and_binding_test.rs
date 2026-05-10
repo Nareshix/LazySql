@@ -38,7 +38,7 @@ fn check_types(sql: &str, expected: (Vec<Type>, Vec<BaseType>)) {
     let binding_parameter: Vec<_> = binding_parameter_result
         .unwrap()
         .iter()
-        .map(|t| t.base_type)
+        .map(|t| t.data_type.base_type)
         .collect();
 
     assert_eq!((select_types, binding_parameter), expected);

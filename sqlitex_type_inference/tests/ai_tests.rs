@@ -34,7 +34,7 @@ mod tests {
         let tables = setup_tables();
         let result =
             get_type_of_binding_parameters(sql, &tables).expect("Query should parse successfully");
-        let actual: Vec<BaseType> = result.iter().map(|t| t.base_type).collect();
+        let actual: Vec<BaseType> = result.iter().map(|t| t.data_type.base_type).collect();
         assert_eq!(actual, expected, "Type mismatch for query: {}", sql);
     }
 
