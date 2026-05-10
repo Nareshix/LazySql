@@ -387,7 +387,7 @@ pub fn validate_sql_file_syntax(sql: &str) -> Result<(), String> {
 pub fn run_qusql_fallback(
     sql: &str,
     all_tables: &std::collections::HashMap<String, Vec<crate::table::ColumnInfo>>,
-) -> Result<(Vec<crate::table::ColumnInfo>, Vec<crate::expr::Type>), String> {
+) -> Result<(Vec<crate::table::ColumnInfo>, Vec<crate::binding_patterns::BindingParam>), String> {
     let mut ddl = String::new();
     for (table_name, cols) in all_tables {
         ddl.push_str(&format!("CREATE TABLE {} (\n", table_name));
@@ -494,7 +494,10 @@ pub fn run_qusql_fallback(
                     }
                 })
                 .collect();
-            let args = arguments.iter().map(|(_, ft)| map_type(ft)).collect();
+            let args = arguments.iter().map(|(_, ft)| crate::binding_patterns::BindingParam {
+                data_type: map_type(ft),
+                name: "arg".to_string(),
+            }).collect();
             Ok((cols, args))
         }
         StatementType::Insert { arguments, .. }
@@ -503,7 +506,10 @@ pub fn run_qusql_fallback(
         | StatementType::Delete { arguments, .. }
         | StatementType::Call { arguments, .. } => Ok((
             vec![],
-            arguments.iter().map(|(_, ft)| map_type(ft)).collect(),
+            arguments.iter().map(|(_, ft)| crate::binding_patterns::BindingParam {
+                data_type: map_type(ft),
+                name: "arg".to_string(),
+            }).collect(),
         )),
         _ => Ok((vec![], vec![])),
     }
