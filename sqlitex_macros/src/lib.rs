@@ -255,76 +255,78 @@ fn expand(
 
             let doc_msg = "Applies all pending migrations from the directory in numerical order. Uses an internal `_sqlitex_migrations` tracking table to ensure each migration is applied only once and atomically.";
             schema_init_method = quote! {
-                #[doc = #doc_msg]
-                pub fn migrate(&mut self) -> Result<(), sqlitex::errors::Error> {
-                    let migrations = vec![
-                        #(#migration_embeds),*
-                    ];
+                            #[doc = #doc_msg]
+                            pub fn migrate(&mut self) -> Result<(), sqlitex::errors::Error> {
+                                let migrations = vec![
+                                    #(#migration_embeds),*
+                                ];
 
-                    // Wrap the ENTIRE migration process in a single transaction.
-                    // This prevents race conditions if multiple instances start simultaneously.
-                    self.transaction(|tx| {
-                        tx.__db.execute_batch(
-                            "CREATE TABLE IF NOT EXISTS _sqlitex_migrations (
+                                // Wrap the entire migration process in a single transaction.
+                                // This prevents race conditions if multiple instances start simultaneously.
+                                self.transaction(|tx| {
+                                    tx.__db.execute_batch(
+                                        "CREATE TABLE IF NOT EXISTS _sqlitex_migrations (
                                 version INTEGER PRIMARY KEY,
                                 name TEXT NOT NULL,
                                 checksum TEXT NOT NULL
                             );"
-                        )?;
+                                    )?;
 
-                        let mut applied_migrations = std::collections::HashMap::new();
-                        if let Ok(rows) = tx.__db.query("SELECT version, checksum FROM _sqlitex_migrations") {
-                            for row in rows.all()? {
-                                applied_migrations.insert(row[0].as_i32(), row[1].as_string());
+                                    let mut applied_migrations = std::collections::HashMap::new();
+                                    if let Ok(rows) = tx.__db.query("SELECT version, checksum FROM _sqlitex_migrations") {
+                                        for row in rows.all()? {
+                                            applied_migrations.insert(row[0].as_i32(), row[1].as_string());
+                                        }
+                                    }
+
+                                    for (version, name, checksum, sql) in migrations {
+                                        if let Some(applied_checksum) = applied_migrations.get(&version) {
+                                            // If it has been applied, verify the checksum!
+                                            if applied_checksum != checksum {
+                                                return Err(sqlitex::errors::Error::from(sqlitex::errors::SqliteFailure {
+                                                    code: 1, // SQLITE_ERROR
+                                                    error_msg: format!("Integrity Error: Migration {} ({}) was altered after being applied to the database!", version, name),
+                                                }));
+                                            }
+                                        } else {
+                                            // If it hasn't been applied, run it!
+                                            tx.__db.execute_batch(sql)?;
+
+                                            let mut stmt = std::ptr::null_mut();
+                                            unsafe {
+                                                sqlitex::utility::utils::prepare_stmt(
+                                                    tx.__db.db,
+                                                    &mut stmt,
+                                                    "INSERT INTO _sqlitex_migrations (version, name, checksum) VALUES (?, ?, ?)"
+                                                ).map_err(|e| sqlitex::errors::Error::from(sqlitex::errors::SqlWriteBindingError::Prepare(e)))?;
+                                            }
+
+                                            let preparred_statement = sqlitex::internal_sqlite::preparred_statement::PreparredStmt {
+                                                stmt,
+                                                conn: tx.__db.db,
+                                            };
+
+                                            preparred_statement.bind_parameter(1, version).map_err(|e| sqlitex::errors::Error::from(sqlitex::errors::SqlWriteBindingError::Bind(e)))?;
+                                            preparred_statement.bind_parameter(2, name).map_err(|e| sqlitex::errors::Error::from(sqlitex::errors::SqlWriteBindingError::Bind(e)))?;
+                                            preparred_statement.bind_parameter(3, checksum).map_err(|e| sqlitex::errors::Error::from(sqlitex::errors::SqlWriteBindingError::Bind(e)))?;
+
+            // Wrap in ManuallyDrop so rust doesn't call `PreparredStmt::drop`.
+            // If it did, it would call sqlite3_reset on a freed pointer, leading to free after use error
+            let mut preparred_statement_mut = std::mem::ManuallyDrop::new(preparred_statement);
+
+            let step_result = preparred_statement_mut.step().map_err(|e| sqlitex::errors::Error::from(sqlitex::errors::SqlWriteBindingError::Step(e)));
+
+            unsafe {
+                // Finalize destroys the prepared statement in SQLite
+                sqlitex::libsqlite3_sys::sqlite3_finalize(preparred_statement_mut.stmt);
+            }
+
+            step_result?;                            }
+                                    }
+                                    Ok(())
+                                })
                             }
-                        }
-
-                        for (version, name, checksum, sql) in migrations {
-                            if let Some(applied_checksum) = applied_migrations.get(&version) {
-                                // If it has been applied, verify the checksum!
-                                if applied_checksum != checksum {
-                                    return Err(sqlitex::errors::Error::from(sqlitex::errors::SqliteFailure {
-                                        code: 1, // SQLITE_ERROR
-                                        error_msg: format!("Integrity Error: Migration {} ({}) was altered after being applied to the database!", version, name),
-                                    }));
-                                }
-                            } else {
-                                // If it hasn't been applied, run it!
-                                tx.__db.execute_batch(sql)?;
-
-                                let mut stmt = std::ptr::null_mut();
-                                unsafe {
-                                    sqlitex::utility::utils::prepare_stmt(
-                                        tx.__db.db,
-                                        &mut stmt,
-                                        "INSERT INTO _sqlitex_migrations (version, name, checksum) VALUES (?, ?, ?)"
-                                    ).map_err(|e| sqlitex::errors::Error::from(sqlitex::errors::SqlWriteBindingError::Prepare(e)))?;
-                                }
-
-                                let preparred_statement = sqlitex::internal_sqlite::preparred_statement::PreparredStmt {
-                                    stmt,
-                                    conn: tx.__db.db,
-                                };
-
-                                preparred_statement.bind_parameter(1, version).map_err(|e| sqlitex::errors::Error::from(sqlitex::errors::SqlWriteBindingError::Bind(e)))?;
-                                preparred_statement.bind_parameter(2, name).map_err(|e| sqlitex::errors::Error::from(sqlitex::errors::SqlWriteBindingError::Bind(e)))?;
-                                preparred_statement.bind_parameter(3, checksum).map_err(|e| sqlitex::errors::Error::from(sqlitex::errors::SqlWriteBindingError::Bind(e)))?;
-
-                                let mut preparred_statement_mut = preparred_statement;
-                                let step_result = preparred_statement_mut.step().map_err(|e| sqlitex::errors::Error::from(sqlitex::errors::SqlWriteBindingError::Step(e)));
-
-                                // finalize to prevent statement leak since this is not managed by SqlitexStmt
-                                unsafe {
-                                    sqlitex::libsqlite3_sys::sqlite3_finalize(preparred_statement_mut.stmt);
-                                }
-
-                                step_result?;
-                            }
-                        }
-                        Ok(())
-                    })
-                }
-            };
+                        };
         } else {
             watcher_tokens = quote! { const _: &[u8] = include_bytes!(#db_path); };
 
