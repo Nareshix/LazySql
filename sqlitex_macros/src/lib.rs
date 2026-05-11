@@ -146,8 +146,7 @@ fn expand(
         let db_path = path.value();
         let path_obj = std::path::Path::new(&db_path);
 
-        if path_obj.is_dir() || db_path.ends_with('/') {
-            // Folder based migrations logic
+if path_obj.is_dir() || db_path.ends_with('/') {
             let mut files: Vec<_> = std::fs::read_dir(path_obj)
                 .map_err(|e| {
                     syn::Error::new(
@@ -159,7 +158,14 @@ fn expand(
                 .filter(|entry| entry.path().extension().and_then(|s| s.to_str()) == Some("sql"))
                 .collect();
 
-            // Natural sort by numeric prefix
+            // EMPTY FOLDER CHECK
+            if files.is_empty() {
+                return Err(syn::Error::new(
+                    path.span(),
+                    format!("No .sql files detected in the migrations directory: '{}'", db_path),
+                ));
+            }
+
             files.sort_by_key(|entry| {
                 let file_name = entry.file_name().to_string_lossy().to_string();
                 let num_str: String = file_name
@@ -169,7 +175,8 @@ fn expand(
                 num_str.parse::<i32>().unwrap_or(std::i32::MAX)
             });
 
-            let mut concatenated_sql = String::new();
+            // We will store the file_name and content to pass to sqlite3_exec
+            let mut script_batches = Vec::new();
             let mut migration_embeds = Vec::new();
             let mut watcher_includes = Vec::new();
             let mut seen_versions = std::collections::HashSet::new();
@@ -190,7 +197,6 @@ fn expand(
                     )
                 })?;
 
-                // Guard against duplicate migration numbers (e.g. 001_init.sql and 1_setup.sql)
                 if !seen_versions.insert(version) {
                     return Err(syn::Error::new(
                         path.span(),
@@ -205,24 +211,25 @@ fn expand(
                     syn::Error::new(path.span(), format!("Failed to read {}: {}", file_name, e))
                 })?;
 
-                // Validate syntax PER-FILE so compiler errors point to the exact file
+                // Per-file type inference & syntax checks
                 sqlitex_type_inference::validate_sql_file_syntax(&content).map_err(|msg| {
-                    syn::Error::new(
-                        path.span(),
-                        format!("In migration file '{}': {}", file_name, msg),
-                    )
+                    syn::Error::new(path.span(), format!("In migration file '{}': {}", file_name, msg))
+                })?;
+                validate_cast_types(&content).map_err(|msg| {
+                    syn::Error::new(path.span(), format!("In migration file '{}': {}", file_name, msg))
+                })?;
+                validate_create_table_types(&content).map_err(|msg| {
+                    syn::Error::new(path.span(), format!("In migration file '{}': {}", file_name, msg))
                 })?;
 
-                concatenated_sql.push_str(&content);
-                concatenated_sql.push_str("\n");
+                // Push to our batches for SQLite execution
+                script_batches.push((file_name.clone(), content.clone()));
 
                 watcher_includes.push(quote! {
                     const _: &[u8] = include_bytes!(#file_path_str);
                 });
 
-                // Robust FNV-1a Checksum
                 let checksum = fnv1a_hash(&content);
-
                 migration_embeds.push(quote! {
                     (#version, #file_name, #checksum, include_str!(#file_path_str))
                 });
@@ -230,22 +237,13 @@ fn expand(
 
             watcher_tokens = quote! { #(#watcher_includes)* };
 
-            validate_cast_types(&concatenated_sql)
-                .map_err(|msg| syn::Error::new(path.span(), format!("In migrations: {}", msg)))?;
-
-            validate_create_table_types(&concatenated_sql)
-                .map_err(|msg| syn::Error::new(path.span(), format!("In migrations: {}", msg)))?;
-
-            // Build the final schema memory state so queries can infer correctly
-            let schemas =
-                sqlitex_core::utility::utils::get_db_schema_from_sql_string(&concatenated_sql)
-                    .map_err(|err| {
-                        syn::Error::new(
-                            path.span(),
-                            format!("Failed to parse migration schema: {}", err),
-                        )
-                    })?;
-
+            // Boot up a real SQLite instance in the compiler and test the scripts file-by-file!
+            let schemas = sqlitex_core::utility::utils::get_db_schema_from_statements(&script_batches)
+                .map_err(|err| {
+                    // This will now output: "In file '02_bad.sql': UNIQUE constraint failed: items.id"
+                    syn::Error::new(path.span(), err)
+                })?;
+                
             for schema in schemas {
                 validate_create_table_types(&schema).map_err(|msg| {
                     syn::Error::new(path.span(), format!("In migrations schema: {}", msg))

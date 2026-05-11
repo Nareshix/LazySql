@@ -223,6 +223,63 @@ pub fn get_db_schema_from_sql_string(sql: &str) -> Result<Vec<String>, String> {
     }
 }
 
+pub fn get_db_schema_from_statements(scripts: &[(String, String)]) -> Result<Vec<String>, String> {
+    let handle = SqliteHandle::open_memory()?;
+    unsafe {
+        for (filename, sql) in scripts {
+            let c_sql = CString::new(sql.as_str())
+                .map_err(|_| format!("File '{}' contains illegal null bytes", filename))?;
+
+            let mut err_msg: *mut c_char = ptr::null_mut();
+            let exec_rc = ffi::sqlite3_exec(handle.db, c_sql.as_ptr(), None, ptr::null_mut(), &mut err_msg);
+
+            if exec_rc != ffi::SQLITE_OK {
+                let msg = if !err_msg.is_null() {
+                    let m = CStr::from_ptr(err_msg).to_string_lossy().into_owned();
+                    ffi::sqlite3_free(err_msg as *mut c_void);
+                    m
+                } else {
+                    "Unknown error".to_string()
+                };
+                // THIS is where we inject the exact file name!
+                return Err(format!("In file '{}': {}", filename, msg));
+            }
+        }
+
+        let query = b"SELECT name, sql FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name\0";
+        let mut stmt = ptr::null_mut();
+        let prepare_rc = ffi::sqlite3_prepare_v2(
+            handle.db,
+            query.as_ptr() as *const c_char,
+            -1,
+            &mut stmt,
+            ptr::null_mut(),
+        );
+
+        if prepare_rc != ffi::SQLITE_OK {
+            let (_, msg) = get_sqlite_failiure(handle.db);
+            return Err(msg);
+        }
+
+        struct StmtGuard(*mut ffi::sqlite3_stmt);
+        impl Drop for StmtGuard {
+            fn drop(&mut self) {
+                unsafe { ffi::sqlite3_finalize(self.0); }
+            }
+        }
+        let _guard = StmtGuard(stmt);
+
+        let mut results = Vec::new();
+        while ffi::sqlite3_step(stmt) == ffi::SQLITE_ROW {
+            let sql_ptr = ffi::sqlite3_column_text(stmt, 1);
+            if !sql_ptr.is_null() {
+                results.push(CStr::from_ptr(sql_ptr as *const c_char).to_string_lossy().into_owned());
+            }
+        }
+        Ok(results)
+    }
+}
+
 pub fn get_db_schema(db_path: &str) -> Result<Vec<String>, String> {
     let handle = SqliteHandle::open(db_path)?;
 
