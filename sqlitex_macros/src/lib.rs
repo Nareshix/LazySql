@@ -149,7 +149,12 @@ fn expand(
         if path_obj.is_dir() || db_path.ends_with('/') {
             // Folder based migrations logic
             let mut files: Vec<_> = std::fs::read_dir(path_obj)
-                .map_err(|e| syn::Error::new(path.span(), format!("Failed to read directory {}: {}", db_path, e)))?
+                .map_err(|e| {
+                    syn::Error::new(
+                        path.span(),
+                        format!("Failed to read directory {}: {}", db_path, e),
+                    )
+                })?
                 .filter_map(|res| res.ok())
                 .filter(|entry| entry.path().extension().and_then(|s| s.to_str()) == Some("sql"))
                 .collect();
@@ -157,7 +162,10 @@ fn expand(
             // Natural sort by numeric prefix
             files.sort_by_key(|entry| {
                 let file_name = entry.file_name().to_string_lossy().to_string();
-                let num_str: String = file_name.chars().take_while(|c| c.is_ascii_digit()).collect();
+                let num_str: String = file_name
+                    .chars()
+                    .take_while(|c| c.is_ascii_digit())
+                    .collect();
                 num_str.parse::<i32>().unwrap_or(std::i32::MAX)
             });
 
@@ -171,16 +179,38 @@ fn expand(
                 let file_path_str = file_path.to_str().unwrap().to_string();
                 let file_name = entry.file_name().to_string_lossy().to_string();
 
-                let num_str: String = file_name.chars().take_while(|c| c.is_ascii_digit()).collect();
-                let version: i32 = num_str.parse().map_err(|_| syn::Error::new(path.span(), format!("Migration filename must start with a number: {}", file_name)))?;
+                let num_str: String = file_name
+                    .chars()
+                    .take_while(|c| c.is_ascii_digit())
+                    .collect();
+                let version: i32 = num_str.parse().map_err(|_| {
+                    syn::Error::new(
+                        path.span(),
+                        format!("Migration filename must start with a number: {}", file_name),
+                    )
+                })?;
 
                 // Guard against duplicate migration numbers (e.g. 001_init.sql and 1_setup.sql)
                 if !seen_versions.insert(version) {
-                    return Err(syn::Error::new(path.span(), format!("Duplicate migration version number detected: {}. Migration numbers must be unique.", version)));
+                    return Err(syn::Error::new(
+                        path.span(),
+                        format!(
+                            "Duplicate migration version number detected: {}. Migration numbers must be unique.",
+                            version
+                        ),
+                    ));
                 }
 
                 let content = std::fs::read_to_string(&file_path).map_err(|e| {
                     syn::Error::new(path.span(), format!("Failed to read {}: {}", file_name, e))
+                })?;
+
+                // Validate syntax PER-FILE so compiler errors point to the exact file
+                sqlitex_type_inference::validate_sql_file_syntax(&content).map_err(|msg| {
+                    syn::Error::new(
+                        path.span(),
+                        format!("In migration file '{}': {}", file_name, msg),
+                    )
                 })?;
 
                 concatenated_sql.push_str(&content);
@@ -206,17 +236,20 @@ fn expand(
             validate_create_table_types(&concatenated_sql)
                 .map_err(|msg| syn::Error::new(path.span(), format!("In migrations: {}", msg)))?;
 
-            sqlitex_type_inference::validate_sql_file_syntax(&concatenated_sql)
-                .map_err(|msg| syn::Error::new(path.span(), format!("In migrations: {}", msg)))?;
-
             // Build the final schema memory state so queries can infer correctly
-            let schemas = sqlitex_core::utility::utils::get_db_schema_from_sql_string(&concatenated_sql).map_err(|err| {
-                syn::Error::new(path.span(), format!("Failed to parse migration schema: {}", err))
-            })?;
+            let schemas =
+                sqlitex_core::utility::utils::get_db_schema_from_sql_string(&concatenated_sql)
+                    .map_err(|err| {
+                        syn::Error::new(
+                            path.span(),
+                            format!("Failed to parse migration schema: {}", err),
+                        )
+                    })?;
 
             for schema in schemas {
-                validate_create_table_types(&schema)
-                    .map_err(|msg| syn::Error::new(path.span(), format!("In migrations schema: {}", msg)))?;
+                validate_create_table_types(&schema).map_err(|msg| {
+                    syn::Error::new(path.span(), format!("In migrations schema: {}", msg))
+                })?;
                 create_tables(&schema, &mut all_tables);
             }
 
@@ -228,33 +261,35 @@ fn expand(
                         #(#migration_embeds),*
                     ];
 
-                    self.__db.execute_batch(
-                        "CREATE TABLE IF NOT EXISTS _sqlitex_migrations (
-                            version INTEGER PRIMARY KEY,
-                            name TEXT NOT NULL,
-                            checksum TEXT NOT NULL
-                        );"
-                    )?;
+                    // Wrap the ENTIRE migration process in a single transaction.
+                    // This prevents race conditions if multiple instances start simultaneously.
+                    self.transaction(|tx| {
+                        tx.__db.execute_batch(
+                            "CREATE TABLE IF NOT EXISTS _sqlitex_migrations (
+                                version INTEGER PRIMARY KEY,
+                                name TEXT NOT NULL,
+                                checksum TEXT NOT NULL
+                            );"
+                        )?;
 
-let mut applied_migrations = std::collections::HashMap::new();
-                    if let Ok(rows) = self.__db.query("SELECT version, checksum FROM _sqlitex_migrations") {
-                        for row in rows.all()? {
-                            applied_migrations.insert(row[0].as_i32(), row[1].as_string());
-                        }
-                    }
-
-                    for (version, name, checksum, sql) in migrations {
-                        if let Some(applied_checksum) = applied_migrations.get(&version) {
-                            // If it has been applied, verify the checksum!
-                            if applied_checksum != checksum {
-                                return Err(sqlitex::errors::Error::from(sqlitex::errors::SqliteFailure {
-                                    code: 1, // SQLITE_ERROR
-                                    error_msg: format!("Integrity Error: Migration {} ({}) was altered after being applied to the database!", version, name),
-                                }));
+                        let mut applied_migrations = std::collections::HashMap::new();
+                        if let Ok(rows) = tx.__db.query("SELECT version, checksum FROM _sqlitex_migrations") {
+                            for row in rows.all()? {
+                                applied_migrations.insert(row[0].as_i32(), row[1].as_string());
                             }
-                        } else {
-                            // If it hasn't been applied, run it!
-                            self.transaction(|tx| {
+                        }
+
+                        for (version, name, checksum, sql) in migrations {
+                            if let Some(applied_checksum) = applied_migrations.get(&version) {
+                                // If it has been applied, verify the checksum!
+                                if applied_checksum != checksum {
+                                    return Err(sqlitex::errors::Error::from(sqlitex::errors::SqliteFailure {
+                                        code: 1, // SQLITE_ERROR
+                                        error_msg: format!("Integrity Error: Migration {} ({}) was altered after being applied to the database!", version, name),
+                                    }));
+                                }
+                            } else {
+                                // If it hasn't been applied, run it!
                                 tx.__db.execute_batch(sql)?;
 
                                 let mut stmt = std::ptr::null_mut();
@@ -276,13 +311,18 @@ let mut applied_migrations = std::collections::HashMap::new();
                                 preparred_statement.bind_parameter(3, checksum).map_err(|e| sqlitex::errors::Error::from(sqlitex::errors::SqlWriteBindingError::Bind(e)))?;
 
                                 let mut preparred_statement_mut = preparred_statement;
-                                preparred_statement_mut.step().map_err(|e| sqlitex::errors::Error::from(sqlitex::errors::SqlWriteBindingError::Step(e)))?;
+                                let step_result = preparred_statement_mut.step().map_err(|e| sqlitex::errors::Error::from(sqlitex::errors::SqlWriteBindingError::Step(e)));
 
-                                Ok(())
-                            })?;
+                                // finalize to prevent statement leak since this is not managed by SqlitexStmt
+                                unsafe {
+                                    sqlitex::libsqlite3_sys::sqlite3_finalize(preparred_statement_mut.stmt);
+                                }
+
+                                step_result?;
+                            }
                         }
-                    }
-                    Ok(())
+                        Ok(())
+                    })
                 }
             };
         } else {
@@ -293,14 +333,17 @@ let mut applied_migrations = std::collections::HashMap::new();
                     syn::Error::new(path.span(), format!("Failed to read {}: {}", db_path, e))
                 })?;
 
-                validate_cast_types(&content)
-                    .map_err(|msg| syn::Error::new(path.span(), format!("In {}: {}", db_path, msg)))?;
+                validate_cast_types(&content).map_err(|msg| {
+                    syn::Error::new(path.span(), format!("In {}: {}", db_path, msg))
+                })?;
 
-                validate_create_table_types(&content)
-                    .map_err(|msg| syn::Error::new(path.span(), format!("In {}: {}", db_path, msg)))?;
+                validate_create_table_types(&content).map_err(|msg| {
+                    syn::Error::new(path.span(), format!("In {}: {}", db_path, msg))
+                })?;
 
-                sqlitex_type_inference::validate_sql_file_syntax(&content)
-                    .map_err(|msg| syn::Error::new(path.span(), format!("In {}: {}", db_path, msg)))?;
+                sqlitex_type_inference::validate_sql_file_syntax(&content).map_err(|msg| {
+                    syn::Error::new(path.span(), format!("In {}: {}", db_path, msg))
+                })?;
 
                 let filename = std::path::Path::new(&db_path)
                     .file_name()
@@ -348,8 +391,9 @@ let mut applied_migrations = std::collections::HashMap::new();
                 syn::Error::new(path.span(), format!("Failed to load DB schema: {}", err))
             })?;
             for schema in schemas {
-                validate_create_table_types(&schema)
-                    .map_err(|msg| syn::Error::new(path.span(), format!("In {}: {}", db_path, msg)))?;
+                validate_create_table_types(&schema).map_err(|msg| {
+                    syn::Error::new(path.span(), format!("In {}: {}", db_path, msg))
+                })?;
                 create_tables(&schema, &mut all_tables);
             }
         }
@@ -397,7 +441,8 @@ let mut applied_migrations = std::collections::HashMap::new();
         // `migrate` method is reserved when pointing to an external migrations folder
         if ident == "migrate"
             && db_path_lit.is_some()
-            && (std::path::Path::new(&db_path_lit.unwrap().value()).is_dir() || db_path_lit.unwrap().value().ends_with('/'))
+            && (std::path::Path::new(&db_path_lit.unwrap().value()).is_dir()
+                || db_path_lit.unwrap().value().ends_with('/'))
         {
             return Err(syn::Error::new(
                 ident.span(),
@@ -1441,131 +1486,134 @@ db.transaction(|tx| {
     Ok(())
 })?;"#;
 
-    Ok((quote! {
-                #[doc(hidden)]
-                mod #mod_name {
-                    use super::*;
-                    #(#generated_structs)*
-                    #item_struct
+    Ok((
+        quote! {
+                    #[doc(hidden)]
+                    mod #mod_name {
+                        use super::*;
+                        #(#generated_structs)*
+                        #item_struct
 
-                    impl #impl_generics #struct_name #ty_generics #where_clause {
-                    /// Creates a new instance.
-                    ///
-                    /// To share one connection across multiple structs, clone the `Arc`:
-                    ///
-                    /// # Example
-                    /// ```rust,ignore
-                    /// let conn = Connection::open("app.db")?; // the conn is the arc btw
-                    ///
-                    /// let mut users = UsersDb::new(conn.clone());
-                    /// let mut logs  = LogsDb::new(conn.clone());
-                    /// let mut posts = PostsDb::new(conn); // last one doesn't need clone
-                    /// ```
-                    ///
-                    /// `Arc::clone` does not duplicate the connection. All structs point to the same database.
-                    pub fn new(
-                        db: impl Into<std::sync::Arc<sqlitex::internal_sqlite::sqlitex_connection::Connection>>,
-                        #(#standard_params),*
-                    ) -> Self {
-                        Self {
-                            __db: db.into(), // Call .into() to turn it into the Arc
-                            #(#standard_assignments,)*
-                            #(#sql_assignments,)*
+                        impl #impl_generics #struct_name #ty_generics #where_clause {
+                        /// Creates a new instance.
+                        ///
+                        /// To share one connection across multiple structs, clone the `Arc`:
+                        ///
+                        /// # Example
+                        /// ```rust,ignore
+                        /// let conn = Connection::open("app.db")?; // the conn is the arc btw
+                        ///
+                        /// let mut users = UsersDb::new(conn.clone());
+                        /// let mut logs  = LogsDb::new(conn.clone());
+                        /// let mut posts = PostsDb::new(conn); // last one doesn't need clone
+                        /// ```
+                        ///
+                        /// `Arc::clone` does not duplicate the connection. All structs point to the same database.
+                        pub fn new(
+                            db: impl Into<std::sync::Arc<sqlitex::internal_sqlite::sqlitex_connection::Connection>>,
+                            #(#standard_params),*
+                        ) -> Self {
+                            Self {
+                                __db: db.into(), // Call .into() to turn it into the Arc
+                                #(#standard_assignments,)*
+                                #(#sql_assignments,)*
+                                }
                             }
+
+
+        #[doc = #transaction_doc]
+        pub fn transaction<T, F>(&mut self, f: F) -> Result<T, sqlitex::errors::Error>
+        where
+            F: FnOnce(&mut Self) -> Result<T, sqlitex::errors::Error>,
+        {
+            // Check if we are the outermost transaction
+            let is_outermost = unsafe {
+                sqlitex::libsqlite3_sys::sqlite3_get_autocommit(self.__db.db) != 0
+            };
+
+            if is_outermost {
+                self.__db.execute_batch("BEGIN IMMEDIATE").map_err(sqlitex::errors::Error::from)?;
+            } else {
+                self.__db.execute_batch("SAVEPOINT sqlitex_tx").map_err(sqlitex::errors::Error::from)?;
+            }
+
+            // Drop on panic unwind
+            let db_ref = self.__db.clone();
+            struct RollbackGuard {
+                db: std::sync::Arc<sqlitex::internal_sqlite::sqlitex_connection::Connection>,
+                is_outermost: bool,
+                committed: bool,
+            }
+
+            impl Drop for RollbackGuard {
+                fn drop(&mut self) {
+                    if !self.committed {
+                        if self.is_outermost {
+                            let _ = self.db.execute_batch("ROLLBACK");
+                        } else {
+                            let _ = self.db.execute_batch("ROLLBACK TO SAVEPOINT sqlitex_tx");
+                            let _ = self.db.execute_batch("RELEASE SAVEPOINT sqlitex_tx");
                         }
+                    }
+                }
+            }
 
+            let mut guard = RollbackGuard { db: db_ref, is_outermost, committed: false };
 
-    #[doc = #transaction_doc]
-    pub fn transaction<T, F>(&mut self, f: F) -> Result<T, sqlitex::errors::Error>
-    where
-        F: FnOnce(&mut Self) -> Result<T, sqlitex::errors::Error>,
-    {
-        // Check if we are the outermost transaction
-        let is_outermost = unsafe {
-            sqlitex::libsqlite3_sys::sqlite3_get_autocommit(self.__db.db) != 0
-        };
+            let result = f(self);
 
-        if is_outermost {
-            self.__db.execute_batch("BEGIN IMMEDIATE").map_err(sqlitex::errors::Error::from)?;
-        } else {
-            self.__db.execute_batch("SAVEPOINT sqlitex_tx").map_err(sqlitex::errors::Error::from)?;
-        }
-
-        // Drop on panic unwind
-        let db_ref = self.__db.clone();
-        struct RollbackGuard {
-            db: std::sync::Arc<sqlitex::internal_sqlite::sqlitex_connection::Connection>,
-            is_outermost: bool,
-            committed: bool,
-        }
-
-        impl Drop for RollbackGuard {
-            fn drop(&mut self) {
-                if !self.committed {
-                    if self.is_outermost {
-                        let _ = self.db.execute_batch("ROLLBACK");
+            match result {
+                Ok(val) => {
+                    if is_outermost {
+                        if let Err(e) = self.__db.execute_batch("COMMIT") {
+                            return Err(sqlitex::errors::Error::from(e));
+                        }
                     } else {
-                        let _ = self.db.execute_batch("ROLLBACK TO SAVEPOINT sqlitex_tx");
-                        let _ = self.db.execute_batch("RELEASE SAVEPOINT sqlitex_tx");
+                        if let Err(e) = self.__db.execute_batch("RELEASE SAVEPOINT sqlitex_tx") {
+                            return Err(sqlitex::errors::Error::from(e));
+                        }
                     }
+                    guard.committed = true;
+                    Ok(val)
                 }
+                Err(e) => Err(e),
             }
         }
 
-        let mut guard = RollbackGuard { db: db_ref, is_outermost, committed: false };
+                //     pub fn transaction_immediate<T, F>(&mut self, f: F) -> Result<T, sqlitex::errors::Error>
+                // where
+                //     F: FnOnce(&mut Self) -> Result<T, sqlitex::errors::Error>,
+                // {
+                //     self.__db.execute_batch("BEGIN IMMEDIATE")
+                //         .map_err(sqlitex::errors::Error::from)?;
 
-        let result = f(self);
+                //     let result = f(self);
 
-        match result {
-            Ok(val) => {
-                if is_outermost {
-                    if let Err(e) = self.__db.execute_batch("COMMIT") {
-                        return Err(sqlitex::errors::Error::from(e));
+                //     match result {
+                //         Ok(val) => {
+                //             if let Err(e) = self.__db.execute_batch("COMMIT") {
+                //                 return Err(sqlitex::errors::Error::from(e));
+                //             }
+                //             Ok(val)
+                //         }
+                //         Err(e) => {
+                //             // Attempt rollback, ignoring failure since we are already erroring
+                //             let _ = self.__db.execute_batch("ROLLBACK");
+                //             Err(e)
+                //         }
+                //     }
+                // }
+                            #open_connected_db_method
+
+                            #schema_init_method
+                            #(#generated_methods)*
+                        }
                     }
-                } else {
-                    if let Err(e) = self.__db.execute_batch("RELEASE SAVEPOINT sqlitex_tx") {
-                        return Err(sqlitex::errors::Error::from(e));
-                    }
-                }
-                guard.committed = true;
-                Ok(val)
-            }
-            Err(e) => Err(e),
-        }
-    }
 
-            //     pub fn transaction_immediate<T, F>(&mut self, f: F) -> Result<T, sqlitex::errors::Error>
-            // where
-            //     F: FnOnce(&mut Self) -> Result<T, sqlitex::errors::Error>,
-            // {
-            //     self.__db.execute_batch("BEGIN IMMEDIATE")
-            //         .map_err(sqlitex::errors::Error::from)?;
-
-            //     let result = f(self);
-
-            //     match result {
-            //         Ok(val) => {
-            //             if let Err(e) = self.__db.execute_batch("COMMIT") {
-            //                 return Err(sqlitex::errors::Error::from(e));
-            //             }
-            //             Ok(val)
-            //         }
-            //         Err(e) => {
-            //             // Attempt rollback, ignoring failure since we are already erroring
-            //             let _ = self.__db.execute_batch("ROLLBACK");
-            //             Err(e)
-            //         }
-            //     }
-            // }
-                        #open_connected_db_method
-
-                        #schema_init_method
-                        #(#generated_methods)*
-                    }
-                }
-
-                pub use #mod_name::#struct_name;
-            }, watcher_tokens))
+                    pub use #mod_name::#struct_name;
+                },
+        watcher_tokens,
+    ))
 }
 
 fn parse_sql_macro_type(ty: &Type) -> syn::Result<Option<LitStr>> {
