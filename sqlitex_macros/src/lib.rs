@@ -243,7 +243,7 @@ if path_obj.is_dir() || db_path.ends_with('/') {
                     // This will now output: "In file '02_bad.sql': UNIQUE constraint failed: items.id"
                     syn::Error::new(path.span(), err)
                 })?;
-                
+
             for schema in schemas {
                 validate_create_table_types(&schema).map_err(|msg| {
                     syn::Error::new(path.span(), format!("In migrations schema: {}", msg))
@@ -281,10 +281,13 @@ if path_obj.is_dir() || db_path.ends_with('/') {
                                         if let Some(applied_checksum) = applied_migrations.get(&version) {
                                             // If it has been applied, verify the checksum!
                                             if applied_checksum != checksum {
-                                                return Err(sqlitex::errors::Error::from(sqlitex::errors::SqliteFailure {
-                                                    code: 1, // SQLITE_ERROR
-                                                    error_msg: format!("Integrity Error: Migration {} ({}) was altered after being applied to the database!", version, name),
-                                                }));
+                                                return Err(sqlitex::errors::Error::Migration(
+                                                    sqlitex::errors::MigrationError::ChecksumMismatch {
+                                                        version: version,
+                                                        name: name.to_string(),
+                                                    }
+                                                ));
+
                                             }
                                         } else {
                                             // If it hasn't been applied, run it!

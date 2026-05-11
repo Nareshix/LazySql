@@ -15,6 +15,17 @@ pub struct SqliteFailure {
     pub error_msg: String,
 }
 
+
+
+#[derive(thiserror::Error, Debug)]
+pub enum MigrationError {
+    #[error(
+        "Integrity Error: Migration {version} ({name}) was altered after being applied to the database!"
+    )]
+    ChecksumMismatch { version: i32, name: String },
+}
+
+
 #[derive(thiserror::Error, Debug)]
 pub enum SqlWriteError {
     #[error("Failed to prepare statement: {0}")]
@@ -71,6 +82,9 @@ pub enum Error {
 
     #[error(transparent)]
     Db(#[from] SqliteFailure), // Needed for Transaction BEGIN/COMMIT failures
+
+    #[error(transparent)]
+    Migration(#[from] MigrationError),
 }
 
 impl From<connection::SqlitePrepareErrors> for Error {
