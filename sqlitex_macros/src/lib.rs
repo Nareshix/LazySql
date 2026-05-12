@@ -1659,13 +1659,23 @@ pub fn my_macro(input: TokenStream) -> TokenStream {
     let new_name_string = format!("{}_", name_as_string);
     let mapper_struct_name = Ident::new(&new_name_string, struct_name.span());
 
-    // TODO error handling
     let fields = match &input.data {
         Data::Struct(s) => match &s.fields {
             Fields::Named(fields_named) => &fields_named.named,
-            _ => panic!("This macro only works on structs with named fields"),
+            _ => {
+                return syn::Error::new(
+                    input.ident.span(),
+                    "SqlMapping only works on structs with named fields",
+                )
+                .to_compile_error()
+                .into();
+            }
         },
-        _ => panic!("This macro only works on structs"),
+        _ => {
+            return syn::Error::new(input.ident.span(), "SqlMapping only works on structs")
+                .to_compile_error()
+                .into();
+        }
     };
 
     let field_bindings = fields.iter().enumerate().map(|(i, f)| {
