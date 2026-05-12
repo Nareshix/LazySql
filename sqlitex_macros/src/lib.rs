@@ -16,14 +16,14 @@ use syn::{
     spanned::Spanned,
 };
 
-/// A lightweight, zero-dependency FNV-1a 64-bit hash function for generating checksums
-fn fnv1a_hash(s: &str) -> String {
+/// hash function for generating checksums
+fn fnv1a_hash(s: &str) -> i64 {
     let mut hash: u64 = 0xcbf29ce484222325;
     for b in s.bytes() {
         hash ^= b as u64;
         hash = hash.wrapping_mul(0x100000001b3);
     }
-    format!("{:016x}", hash)
+    hash as i64
 }
 
 /// This nicely formats the sql string.///
@@ -146,7 +146,7 @@ fn expand(
         let db_path = path.value();
         let path_obj = std::path::Path::new(&db_path);
 
-if path_obj.is_dir() || db_path.ends_with('/') {
+        if path_obj.is_dir() || db_path.ends_with('/') {
             let mut files: Vec<_> = std::fs::read_dir(path_obj)
                 .map_err(|e| {
                     syn::Error::new(
@@ -162,7 +162,10 @@ if path_obj.is_dir() || db_path.ends_with('/') {
             if files.is_empty() {
                 return Err(syn::Error::new(
                     path.span(),
-                    format!("No .sql files detected in the migrations directory: '{}'", db_path),
+                    format!(
+                        "No .sql files detected in the migrations directory: '{}'",
+                        db_path
+                    ),
                 ));
             }
 
@@ -190,7 +193,7 @@ if path_obj.is_dir() || db_path.ends_with('/') {
                     .chars()
                     .take_while(|c| c.is_ascii_digit())
                     .collect();
-                let version: i32 = num_str.parse().map_err(|_| {
+                let version: i64 = num_str.parse().map_err(|_| {
                     syn::Error::new(
                         path.span(),
                         format!("Migration filename must start with a number: {}", file_name),
@@ -213,13 +216,22 @@ if path_obj.is_dir() || db_path.ends_with('/') {
 
                 // Per-file type inference & syntax checks
                 sqlitex_type_inference::validate_sql_file_syntax(&content).map_err(|msg| {
-                    syn::Error::new(path.span(), format!("In migration file '{}': {}", file_name, msg))
+                    syn::Error::new(
+                        path.span(),
+                        format!("In migration file '{}': {}", file_name, msg),
+                    )
                 })?;
                 validate_cast_types(&content).map_err(|msg| {
-                    syn::Error::new(path.span(), format!("In migration file '{}': {}", file_name, msg))
+                    syn::Error::new(
+                        path.span(),
+                        format!("In migration file '{}': {}", file_name, msg),
+                    )
                 })?;
                 validate_create_table_types(&content).map_err(|msg| {
-                    syn::Error::new(path.span(), format!("In migration file '{}': {}", file_name, msg))
+                    syn::Error::new(
+                        path.span(),
+                        format!("In migration file '{}': {}", file_name, msg),
+                    )
                 })?;
 
                 // Push to our batches for SQLite execution
@@ -237,12 +249,13 @@ if path_obj.is_dir() || db_path.ends_with('/') {
 
             watcher_tokens = quote! { #(#watcher_includes)* };
 
-            // Boot up a real SQLite instance in the compiler and test the scripts file-by-file!
-            let schemas = sqlitex_core::utility::utils::get_db_schema_from_statements(&script_batches)
-                .map_err(|err| {
-                    // This will now output: "In file '02_bad.sql': UNIQUE constraint failed: items.id"
-                    syn::Error::new(path.span(), err)
-                })?;
+            // Boot up a real SQLite instance in the compiler and test the scripts file-by-file
+            let schemas =
+                sqlitex_core::utility::utils::get_db_schema_from_statements(&script_batches)
+                    .map_err(|err| {
+                        // This will now output: "In file '02_bad.sql': UNIQUE constraint failed: items.id"
+                        syn::Error::new(path.span(), err)
+                    })?;
 
             for schema in schemas {
                 validate_create_table_types(&schema).map_err(|msg| {
@@ -273,14 +286,14 @@ if path_obj.is_dir() || db_path.ends_with('/') {
                                     let mut applied_migrations = std::collections::HashMap::new();
                                     if let Ok(rows) = tx.__db.query("SELECT version, checksum FROM _sqlitex_migrations") {
                                         for row in rows.all()? {
-                                            applied_migrations.insert(row[0].as_i32(), row[1].as_string());
+                                            applied_migrations.insert(row[0].as_i64(), row[1].as_i64());
                                         }
                                     }
 
                                     for (version, name, checksum, sql) in migrations {
                                         if let Some(applied_checksum) = applied_migrations.get(&version) {
                                             // If it has been applied, verify the checksum!
-                                            if applied_checksum != checksum {
+                                            if *applied_checksum != checksum {
                                                 return Err(sqlitex::errors::Error::Migration(
                                                     sqlitex::errors::MigrationError::ChecksumMismatch {
                                                         version: version,

@@ -384,8 +384,12 @@ pub fn validate_sql_file_syntax(sql: &str) -> Result<(), String> {
 
     for stmt in ast {
         match stmt {
-            Statement::StartTransaction { .. } | Statement::Commit { .. } | Statement::Rollback { .. } => {
-                return Err("Explicit transaction control (BEGIN/COMMIT/ROLLBACK) is not allowed in migrations. sqlitex handles transactions atomically for you.".to_string());
+            Statement::StartTransaction { .. }
+            | Statement::Commit { .. }
+            | Statement::Rollback { .. }
+            | Statement::Savepoint { .. }
+            | Statement::ReleaseSavepoint { .. } => {
+                return Err("Explicit transaction control (BEGIN/COMMIT/ROLLBACK/SAVEPOINT) is not allowed in migrations. sqlitex handles transactions atomically for you.".to_string());
             }
             _ => {}
         }

@@ -19,10 +19,14 @@ pub struct SqliteFailure {
 
 #[derive(thiserror::Error, Debug)]
 pub enum MigrationError {
+    /// A previously applied migration file has been modified.
+    ///
+    /// To protect database integrity, `sqlitex` refuses to boot if a migration
+    /// file's checksum has changed after it was already applied.
     #[error(
         "Integrity Error: Migration {version} ({name}) was altered after being applied to the database!"
     )]
-    ChecksumMismatch { version: i32, name: String },
+    ChecksumMismatch { version: i64, name: String },
 }
 
 
