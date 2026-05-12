@@ -279,7 +279,7 @@ fn expand(
                                         "CREATE TABLE IF NOT EXISTS _sqlitex_migrations (
                                 version INTEGER PRIMARY KEY,
                                 name TEXT NOT NULL,
-                                checksum TEXT NOT NULL
+                                checksum INTEGER NOT NULL
                             );"
                                     )?;
 
