@@ -1484,9 +1484,7 @@ db.{}_bulk(&bulk)?;
 
     let (impl_generics, ty_generics, where_clause) = item_struct.generics.split_for_impl();
 
-    let mod_name =
-        quote::format_ident!("__sqlitex_inner_{}", struct_name.to_string().to_lowercase());
-
+    //
     item_struct.vis = parse_quote!(pub);
 
     let transaction_doc = r#"Executes multiple database operations inside a single transaction.
@@ -1506,12 +1504,10 @@ db.transaction(|tx| {
 
     Ok((
         quote! {
-                    #[doc(hidden)]
-                    mod #mod_name {
-                        use super::*;
-                        #(#generated_structs)*
-                        #item_struct
+                    #(#generated_structs)*
+                    #item_struct
 
+                    const _: () = {
                         impl #impl_generics #struct_name #ty_generics #where_clause {
                         /// Creates a new instance.
                         ///
@@ -1626,9 +1622,7 @@ db.transaction(|tx| {
                             #schema_init_method
                             #(#generated_methods)*
                         }
-                    }
-
-                    pub use #mod_name::#struct_name;
+                    };
                 },
         watcher_tokens,
     ))
