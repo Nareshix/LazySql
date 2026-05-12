@@ -7,7 +7,6 @@ pub struct SqlitexStmt {
 }
 
 unsafe impl Send for SqlitexStmt {}
-unsafe impl Sync for SqlitexStmt {}
 
 impl Drop for SqlitexStmt {
     fn drop(&mut self) {

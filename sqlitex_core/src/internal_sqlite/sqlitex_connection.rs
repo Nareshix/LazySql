@@ -20,7 +20,6 @@ use crate::{
 };
 
 unsafe impl Send for Connection {}
-unsafe impl Sync for Connection {}
 
 pub struct Connection {
     pub db: *mut sqlite3,
