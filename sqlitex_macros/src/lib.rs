@@ -242,8 +242,10 @@ fn expand(
                 });
 
                 let checksum = fnv1a_hash(&content);
+                let checksum_tokens: proc_macro2::TokenStream =
+                    checksum.to_string().parse().unwrap();
                 migration_embeds.push(quote! {
-                    (#version, #file_name, #checksum, include_str!(#file_path_str))
+                    (#version, #file_name, #checksum_tokens, include_str!(#file_path_str))
                 });
             }
 
