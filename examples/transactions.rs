@@ -29,12 +29,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         tx.add("Alice")?;
         tx.add("Bob")?;
 
-        let count = tx.count()?.all()?;
+        let count = tx.count()?;
 
         Ok(count)
         })?;
 
-    println!("{:?}", results[0].count); // prints out '2'
+    println!("{:?}", results); // prints out '2'
 
     // Failed Transaction (Automatic Rollback)
     // We try to add Charlie, then add Alice again.
