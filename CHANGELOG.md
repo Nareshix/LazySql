@@ -6,13 +6,25 @@
 
 ### Features
 
-- Improved robustness of type inference system.
-- [**breaking**] Smarter return types for queries
+- Improved robustness of type inference system.-
 - Auto generate parameter names from SQL context
 - Added native migration support
+- **[breaking]** Smarter Query Return Types. Compiler will mostly help you to fix the changes
+
+  - **Unique/PK lookups** now return `Option<T>`:
+    - _Old:_ `let user = db.get_user(1)?.first()?;`
+    - _New:_ `let user = db.get_user(1)?;`
+  - **Aggregate queries** (e.g. COUNT(*)) now return `T` directly:
+    - _Old:_ `let stats = db.get_stats()?.first()?.unwrap();`
+    - _New:_ `let stats = db.get_stats()?;`
+  - **Single column queries** now return primitive types (e.g., `i64`, `String`) instead of structs:
+    - _Old:_ `let count = db.count_users()?.first()?.unwrap().col_0;`
+    - _New:_ `let count: i64 = db.count_users()?;`
+
 
 
 ## [0.3.1] - 05-05-2026
+
 `pretty-assertion` crate is now a dev dependency, thus won't be included in final binary
 
 ## [0.3.0] - 05-05-2026
@@ -48,6 +60,7 @@
 - removed `exec` fn and replaced all macro genreation which dependent on it with `execute_batch`
 
 ## [0.2.3 - 0.2.5] - 2026-05-04
+
 Documentation testing
 
 ## [0.2.2] - 2026-05-03
