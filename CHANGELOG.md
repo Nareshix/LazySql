@@ -2,7 +2,15 @@
 
 **follows `yyyy-mm-dd` format**
 
-non-exhaustive but some ideas: `Added`, `Migration`/`Breaking Changes`, `Changed`, `Deprecated`, `Removed`, `Fixed`, `Security`, `Internal`
+## [0.4.0] - 2026-05-14
+
+### Features
+
+- Improved robustness of type inference system.
+- [**breaking**] Smarter return types for queries
+- Auto generate parameter names from SQL context
+- Added native migration support
+
 
 ## [0.3.1] - 05-05-2026
 `pretty-assertion` crate is now a dev dependency, thus won't be included in final binary
