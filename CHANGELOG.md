@@ -6,10 +6,10 @@
 
 ### Features
 
-- Improved robustness of type inference system.-
+- Improved robustness of type inference system.
 - Auto generate parameter names from SQL context
 - Added native migration support
-- **[breaking]** Smarter Query Return Types. Compiler will mostly help you to fix the changes
+- **[breaking]** Smarter Query Return Types. Compiler will mostly help you to fix the changes. More detailed explanation can be found in the release, below is just a brief exmaple.
 
   - **Unique/PK lookups** now return `Option<T>`:
     - _Old:_ `let user = db.get_user(1)?.first()?;`
