@@ -4,6 +4,8 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 description = "type inference for sqlitex"
+repository = "https://github.com/Nareshix/sqlitex"
+documentation = "https://docs.rs/sqlitex/latest/sqlitex"
 
 [dependencies]
 sqlparser = {version = "0.59.0", features = ["visitor"]}
