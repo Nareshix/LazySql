@@ -8,7 +8,6 @@ Sqlitex is a sqlite library for rust which aims to be simple and powerful. It of
   - Automatically caches and reuses prepared statements for you
   - Automatically applies optimal PRAGMA settings for performance and reliability
 
-
 ## Overview
 
 - [Quickstart](#quickstart)
@@ -34,10 +33,11 @@ Sqlitex is a sqlite library for rust which aims to be simple and powerful. It of
 - [Comparison with other libraries](#comparison-with-other-libraries)
 
 ## Quickstart
+
 Install it via
 
 ```bash
-cargo add sqlitex
+cargo add sqlitex@0.4.0
 ```
 
 Simple usage example:
@@ -84,7 +84,6 @@ _A more detailed version of this exact quickstart can be found_ [here](./example
 
 For more examples and features, look at the [examples](./examples/) folder or read the [documentations](https://docs.rs/sqlitex/latest/sqlitex/).
 
-
 ## Feature showcase
 
 1.  Auto generate method signatures with correct types and
@@ -101,7 +100,6 @@ For more examples and features, look at the [examples](./examples/) folder or re
    ![error_2](https://github.com/Nareshix/sqlitex/blob/main/amedia_for_readme/error_2.png?raw=true)
 
    ![error_3](https://github.com/Nareshix/sqlitex/blob/main/amedia_for_readme/error_3.png?raw=true)
-
 
 ## Connection methods
 
@@ -235,7 +233,8 @@ They all are in the [examples](https://github.com/Nareshix/sqlitex/tree/main/exa
 you will most likely **never** need to use this.
 
 #### How to use `sql_escape_hatch!`
-The usage is very similar to how  [rusqlite](https://github.com/rusqlite/rusqlite) works except that you get compile time benefits as well.
+
+The usage is very similar to how [rusqlite](https://github.com/rusqlite/rusqlite) works except that you get compile time benefits as well.
 
 ##### a. `SELECT` statements
 
@@ -371,6 +370,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-
 ## Comparison with other libraries
+
 [Look here](./COMPARISON.md)

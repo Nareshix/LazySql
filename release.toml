@@ -1,0 +1,6 @@
+shared-version = true
+tag-name = "v{{version}}"
+pre-release-commit-message = "chore: release v{{version}}"
+pre-release-replacements = [
+  {file="README.md", search="cargo add sqlitex@[0-9.]+", replace="cargo add sqlitex@{{version}}"},
+]

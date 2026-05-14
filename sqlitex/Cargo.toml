@@ -14,3 +14,6 @@ documentation = "https://docs.rs/sqlitex/latest/sqlitex"
 [dependencies]
 sqlitex_core.workspace = true
 sqlitex_macros.workspace = true
+
+[package.metadata.release]
+pre-release-hook = ["git", "cliff", "--unreleased", "--bump", "--prepend", "../CHANGELOG.md"]

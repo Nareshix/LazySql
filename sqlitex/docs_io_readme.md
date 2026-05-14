@@ -27,7 +27,7 @@ sqlitex is an ergonomic sqlite library for rust with compile time guarantees. Fe
 Install it via
 
 ```bash
-cargo add sqlitex
+cargo add sqlitex@0.4.0
 ```
 
 Simple usage example:
@@ -206,7 +206,8 @@ They all are in the [examples](https://github.com/Nareshix/sqlitex/tree/main/exa
 you will most likely **never** need to use this.
 
 #### How to use `sql_escape_hatch!`
-The usage is very similar to how  [rusqlite](https://github.com/rusqlite/rusqlite) works except that you get compile time benefits as well.
+
+The usage is very similar to how [rusqlite](https://github.com/rusqlite/rusqlite) works except that you get compile time benefits as well.
 
 ##### a. `SELECT` statements
 
