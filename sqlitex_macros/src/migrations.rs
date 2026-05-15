@@ -200,17 +200,21 @@ pub(crate) fn process_migrations_dir(
                                     // If it hasn't been applied, run it!
                                     tx.__db.execute_batch(sql)?;
 
-                                    let mut stmt = std::ptr::null_mut();
+                                    let mut sql_stmt = sqlitex::internal_sqlite::sqlitex_statement::SqlitexStmt {
+                                        sql_query: "INSERT INTO _sqlitex_migrations (version, name, checksum) VALUES (?, ?, ?)",
+                                        stmt: std::ptr::null_mut(),
+                                    };
+
                                     unsafe {
                                         sqlitex::utility::utils::prepare_stmt(
                                             tx.__db.db,
-                                            &mut stmt,
-                                            "INSERT INTO _sqlitex_migrations (version, name, checksum) VALUES (?, ?, ?)"
+                                            &mut sql_stmt.stmt,
+                                            sql_stmt.sql_query
                                         ).map_err(|e| sqlitex::errors::Error::from(sqlitex::errors::SqlWriteBindingError::Prepare(e)))?;
                                     }
 
-                                    let preparred_statement = sqlitex::internal_sqlite::preparred_statement::PreparredStmt {
-                                        stmt,
+                                    let mut preparred_statement = sqlitex::internal_sqlite::preparred_statement::PreparredStmt {
+                                        stmt: sql_stmt.stmt,
                                         conn: tx.__db.db,
                                     };
 
@@ -218,18 +222,9 @@ pub(crate) fn process_migrations_dir(
                                     preparred_statement.bind_parameter(2, name).map_err(|e| sqlitex::errors::Error::from(sqlitex::errors::SqlWriteBindingError::Bind(e)))?;
                                     preparred_statement.bind_parameter(3, checksum).map_err(|e| sqlitex::errors::Error::from(sqlitex::errors::SqlWriteBindingError::Bind(e)))?;
 
-    // Wrap in ManuallyDrop so rust doesn't call `PreparredStmt::drop`.
-    // If it did, it would call sqlite3_reset on a freed pointer, leading to free after use error
-    let mut preparred_statement_mut = std::mem::ManuallyDrop::new(preparred_statement);
+                                    preparred_statement.step().map_err(|e| sqlitex::errors::Error::from(sqlitex::errors::SqlWriteBindingError::Step(e)))?;
 
-    let step_result = preparred_statement_mut.step().map_err(|e| sqlitex::errors::Error::from(sqlitex::errors::SqlWriteBindingError::Step(e)));
-
-    unsafe {
-        // Finalize destroys the prepared statement in SQLite
-        sqlitex::libsqlite3_sys::sqlite3_finalize(preparred_statement_mut.stmt);
-    }
-
-    step_result?;                            }
+                                }
                             }
                             Ok(())
                         })
