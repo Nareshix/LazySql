@@ -4,7 +4,6 @@ use libsqlite3_sys::{
     sqlite3_column_double, sqlite3_column_int64, sqlite3_column_text, sqlite3_column_type,
     sqlite3_finalize, sqlite3_step, sqlite3_stmt,
 };
-use std::ffi::CStr;
 
 use crate::{
     errors::row::RowMapperError, traits::dynamic::Value, utility::utils::get_sqlite_failiure,

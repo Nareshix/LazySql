@@ -574,6 +574,7 @@ pub fn detect_query_cardinality(
         GroupByExpr::Expressions(exprs, _) => !exprs.is_empty(),
         GroupByExpr::All(_) => true,
     };
+    let has_having = select.having.is_some();
 
     // Aggregates without GROUP BY are ExactlyOne ONLY IF there is no LIMIT clause.
     if !has_group_by && query.limit_clause.is_none() {
@@ -595,7 +596,13 @@ pub fn detect_query_cardinality(
             });
 
         if all_are_aggregates {
-            return QueryCardinality::ExactlyOne;
+            if has_having {
+                // It might return 1 row, or 0 rows if it gets filtered out.
+                return QueryCardinality::ZeroOrOne;
+            } else {
+                // Without HAVING, it unconditionally returns exactly 1 row.
+                return QueryCardinality::ExactlyOne;
+            }
         }
     }
 
@@ -607,28 +614,23 @@ pub fn detect_query_cardinality(
         // WHERE unique_col = ? (no OR breaking the guarantee) → ZeroOrOne
         if let Some(selection) = &select.selection {
             // Collect table names in scope for this SELECT
-            let table_names: Vec<String> = select
-                .from
-                .iter()
-                .filter_map(|t| {
-                    if let sqlparser::ast::TableFactor::Table { name, alias, .. } = &t.relation {
-                        let real = name
-                            .0
-                            .last()
-                            .map(normalize_identifier_from_part)
-                            .unwrap_or_default();
-                        Some(if let Some(a) = alias {
-                            a.name.value.to_lowercase()
-                        } else {
-                            real
-                        })
-                    } else {
-                        None
-                    }
-                })
-                .collect();
+            let mut alias_map = HashMap::new();
+            for t in &select.from {
+                if let sqlparser::ast::TableFactor::Table { name, alias, .. } = &t.relation {
+                    let real = name
+                        .0
+                        .last()
+                        .map(normalize_identifier_from_part)
+                        .unwrap_or_default();
+                    let effective = alias
+                        .as_ref()
+                        .map(|a| a.name.value.to_lowercase())
+                        .unwrap_or_else(|| real.clone());
+                    alias_map.insert(effective, real);
+                }
+            }
 
-            if has_unique_equality_where(selection, &table_names, all_tables) {
+            if has_unique_equality_where(selection, &alias_map, all_tables) {
                 return QueryCardinality::ZeroOrOne;
             }
         }
@@ -649,7 +651,7 @@ fn normalize_identifier_from_part(part: &sqlparser::ast::ObjectNamePart) -> Stri
 /// PRIMARY KEY or UNIQUE column, without any OR that would break the guarantee.
 fn has_unique_equality_where(
     expr: &sqlparser::ast::Expr,
-    table_names: &[String],
+    alias_map: &HashMap<String, String>,
     all_tables: &HashMap<String, Vec<ColumnInfo>>,
 ) -> bool {
     match expr {
@@ -668,7 +670,7 @@ fn has_unique_equality_where(
             };
 
             if let Some(col_expr) = col_side {
-                return column_is_unique(col_expr, table_names, all_tables);
+                return column_is_unique(col_expr, alias_map, all_tables);
             }
             false
         }
@@ -678,10 +680,10 @@ fn has_unique_equality_where(
             op: BinaryOperator::And,
             right,
         } => {
-            has_unique_equality_where(left, table_names, all_tables)
-                || has_unique_equality_where(right, table_names, all_tables)
+            has_unique_equality_where(left, alias_map, all_tables)
+                || has_unique_equality_where(right, alias_map, all_tables)
         }
-        Expr::Nested(inner) => has_unique_equality_where(inner, table_names, all_tables),
+        Expr::Nested(inner) => has_unique_equality_where(inner, alias_map, all_tables),
         // OR breaks the uniqueness guarantee
         _ => false,
     }
@@ -708,7 +710,7 @@ fn is_placeholder_or_literal(expr: &sqlparser::ast::Expr) -> bool {
 
 fn column_is_unique(
     expr: &sqlparser::ast::Expr,
-    table_names: &[String],
+    alias_map: &HashMap<String, String>,
     all_tables: &HashMap<String, Vec<ColumnInfo>>,
 ) -> bool {
     let (table_hint, col_name) = match expr {
@@ -722,17 +724,19 @@ fn column_is_unique(
     };
 
     if let Some(tbl) = table_hint {
+        // translate alias "u" -> "users" using alias_map BEFORE looking it up
+        let real_table = alias_map.get(&tbl).unwrap_or(&tbl);
         return all_tables
-            .get(&tbl)
+            .get(real_table)
             .and_then(|cols| cols.iter().find(|c| c.name == col_name))
             .map(|c| c.is_unique)
             .unwrap_or(false);
     }
 
-    // No table qualifier — search all tables in scope
-    let matches: Vec<bool> = table_names
-        .iter()
-        .filter_map(|t| all_tables.get(t))
+    // uf no No table qualified, search all tables mapped in this query
+    let matches: Vec<bool> = alias_map
+        .values()
+        .filter_map(|real_t| all_tables.get(real_t))
         .flat_map(|cols| cols.iter())
         .filter(|c| c.name == col_name)
         .map(|c| c.is_unique)
