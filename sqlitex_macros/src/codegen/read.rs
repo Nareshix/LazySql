@@ -1,15 +1,12 @@
-use proc_macro2::{Span, TokenStream};
+use proc_macro2::TokenStream;
 use quote::quote;
 use sqlitex_type_inference::{
     binding_patterns::BindingParam, expr::BaseType, table::ColumnInfo, QueryCardinality,
 };
+use crate::codegen::context::CodegenContext;
 
 pub fn generate_read_methods(
-    sql_span: Span,
-    struct_name: &syn::Ident,
-    ident: &syn::Ident,
-    field_attrs: &[syn::Attribute],
-    doc_comment: &str,
+    ctx: &CodegenContext,
     binding_types: &[BindingParam],
     param_names: &[String],
     select_types: &[ColumnInfo],
@@ -17,6 +14,11 @@ pub fn generate_read_methods(
 ) -> syn::Result<(TokenStream, TokenStream)> {
     let mut generated_structs = quote! {};
     let mut generated_methods = quote! {};
+
+    let ident = ctx.ident;
+    let field_attrs = ctx.field_attrs;
+    let doc_comment = &ctx.doc_comment;
+    let struct_name = ctx.struct_name;
 
     let is_single_col = select_types.len() == 1;
 
@@ -37,34 +39,8 @@ pub fn generate_read_methods(
     let mapper_struct_name = quote::format_ident!("{}{}_", struct_name, pascal_name);
     let scalar_mapper_name = quote::format_ident!("{}_{}_scalar_", struct_name, ident);
 
-    let mut method_args = Vec::new();
-    let mut bind_calls = Vec::new();
-
-    for (i, bind_param) in binding_types.iter().enumerate() {
-        let arg_name = quote::format_ident!("{}", param_names[i]);
-        let bind_type = &bind_param.data_type;
-        let bind_index = (i + 1) as i32;
-
-        let rust_base_type = match bind_type.base_type {
-            BaseType::Integer => quote! { i64 },
-            BaseType::Real => quote! { f64 },
-            BaseType::Bool => quote! { bool },
-            BaseType::Text => quote! { &str },
-            BaseType::Blob => quote! { &[u8] },
-            _ => return Err(syn::Error::new(sql_span, "Unable to infer type for `?`. Consider casting with `::` or `CAST AS`")),
-        };
-
-        let final_type = if bind_type.nullable {
-            quote! { Option<#rust_base_type> }
-        } else {
-            quote! { #rust_base_type }
-        };
-
-        method_args.push(quote! { #arg_name: #final_type });
-        bind_calls.push(quote! {
-            preparred_statement.bind_parameter(#bind_index, #arg_name)?;
-        });
-    }
+    // Call unified Bindings Logic
+    let (method_args, bind_calls) = ctx.generate_bindings(binding_types, param_names)?;
 
     let single_col_rust_type = if is_single_col {
         let col = &select_types[0];
@@ -95,7 +71,7 @@ pub fn generate_read_methods(
                 BaseType::Text => quote! { String },
                 BaseType::Blob => quote! { Vec<u8> },
                 BaseType::Bool => quote! { bool },
-                _ => return Err(syn::Error::new(sql_span, "Unable to infer return type. Consider casting with `::` or `CAST AS`")),
+                _ => return Err(syn::Error::new(ctx.sql_span, "Unable to infer return type. Consider casting with `::` or `CAST AS`")),
             };
             let final_ty = if col.data_type.nullable {
                 quote! { Option<#base_ty> }
@@ -151,22 +127,7 @@ pub fn generate_read_methods(
         }
     }
 
-    let prepare_block = quote! {
-        if self.#ident.stmt.is_null() {
-            unsafe {
-                sqlitex::utility::utils::prepare_stmt(
-                    self.__db.db,
-                    &mut self.#ident.stmt,
-                    self.#ident.sql_query
-                )?;
-            }
-        }
-        let mut preparred_statement = sqlitex::internal_sqlite::preparred_statement::PreparredStmt {
-            stmt: self.#ident.stmt,
-            conn: self.__db.db,
-        };
-        #(#bind_calls)*
-    };
+    let prepare_block = ctx.generate_prepare_block();
 
     let ret_err_type = if binding_types.is_empty() {
         quote! { sqlitex::errors::SqlReadError }
@@ -181,6 +142,7 @@ pub fn generate_read_methods(
                 #[doc = #doc_comment]
                 pub fn #ident(&mut self #(, #method_args)*) -> Result<sqlitex::internal_sqlite::rows_dao::Rows<'_, #mapper_struct_name>, #ret_err_type> {
                     #prepare_block
+                    #(#bind_calls)*
                     Ok(preparred_statement.query(#output_struct_name))
                 }
             });
@@ -191,6 +153,7 @@ pub fn generate_read_methods(
                 #[doc = #doc_comment]
                 pub fn #ident(&mut self #(, #method_args)*) -> Result<Option<#output_struct_name>, sqlitex::errors::Error> {
                     #prepare_block
+                    #(#bind_calls)*
                     preparred_statement.query(#output_struct_name)
                         .first()
                         .map_err(sqlitex::errors::Error::from)
@@ -203,6 +166,7 @@ pub fn generate_read_methods(
                 #[doc = #doc_comment]
                 pub fn #ident(&mut self #(, #method_args)*) -> Result<#output_struct_name, sqlitex::errors::Error> {
                     #prepare_block
+                    #(#bind_calls)*
                     preparred_statement.query(#output_struct_name)
                         .first()
                         .map_err(sqlitex::errors::Error::from)
@@ -216,6 +180,7 @@ pub fn generate_read_methods(
                 #[doc = #doc_comment]
                 pub fn #ident(&mut self #(, #method_args)*) -> Result<Option<#single_col_rust_type>, sqlitex::errors::Error> {
                     #prepare_block
+                    #(#bind_calls)*
                     preparred_statement.query(#scalar_mapper_name)
                         .first()
                         .map_err(sqlitex::errors::Error::from)
@@ -228,6 +193,7 @@ pub fn generate_read_methods(
                 #[doc = #doc_comment]
                 pub fn #ident(&mut self #(, #method_args)*) -> Result<#single_col_rust_type, sqlitex::errors::Error> {
                     #prepare_block
+                    #(#bind_calls)*
                     preparred_statement.query(#scalar_mapper_name)
                         .first()
                         .map_err(sqlitex::errors::Error::from)

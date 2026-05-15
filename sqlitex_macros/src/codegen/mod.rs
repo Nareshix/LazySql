@@ -13,10 +13,13 @@ use crate::sqlite_validation::validate_sql_syntax_with_sqlite;
 use crate::utils::*;
 use crate::{migrations, parse::*, schema_source};
 
+pub mod context;
 pub mod create_table;
 pub mod read;
 pub mod runtime;
 pub mod write;
+
+use context::CodegenContext;
 
 pub(crate) fn expand(
     item_struct: &mut ItemStruct,
@@ -63,103 +66,108 @@ pub(crate) fn expand(
     let mut generated_methods = Vec::new();
     let mut generated_structs = Vec::new();
 
-    for field in fields.named.iter_mut() {
+for field in fields.named.iter_mut() {
         let ident = field.ident.clone().unwrap();
         let field_attrs = field.attrs.clone();
 
         validate_field_name(&ident, db_path_lit)?;
 
-        if let Some(sql_lit) = parse_sql_macro_type(&field.ty)? {
-            let sql_query = prepare_sql_string(&sql_lit.value(), sql_lit.span())?;
+        let sql_macro_opt = parse_sql_macro_type(&field.ty)?;
+        let runtime_macro_opt = parse_runtime_macro(&field.ty)?;
 
-            validate_no_virtual_tables(&sql_query)
-                .map_err(|msg| syn::Error::new(sql_lit.span(), msg))?;
-            validate_cast_types(&sql_query).map_err(|msg| syn::Error::new(sql_lit.span(), msg))?;
-            validate_create_table_types(&sql_query)
-                .map_err(|msg| syn::Error::new(sql_lit.span(), msg))?;
+        // If the field is EITHER `sql!` OR `sql_escape_hatch!`
+        if sql_macro_opt.is_some() || runtime_macro_opt.is_some() {
 
-            if let Err(err_msg) = validate_single_statement(&sql_query) {
-                return Err(syn::Error::new(sql_lit.span(), err_msg));
-            }
-            if let Err(err_msg) = validate_sql_syntax_with_sqlite(&all_tables, &sql_query) {
-                return Err(syn::Error::new(sql_lit.span(), err_msg.to_string()));
-            }
-            if let Err(err_msg) = validate_insert_strict(&sql_query, &all_tables) {
-                return Err(syn::Error::new(sql_lit.span(), err_msg.to_string()));
-            }
-
-            field.ty = parse_quote!(sqlitex::internal_sqlite::sqlitex_statement::SqlitexStmt);
-            push_sql_assignment(&ident, &sql_query, sql_lit.span(), &mut sql_assignments);
-
-            let doc_comment = format!(" \n**SQL**\n```sql\n{}", format_sql(&sql_query));
-
-            if is_create_table(&sql_query) {
-                create_tables(&sql_query, &mut all_tables);
-                generated_methods.push(create_table::generate_create_table(
-                    &ident,
-                    &field_attrs,
-                    &doc_comment,
-                ));
-                continue;
-            }
-
-            let select_types =
-                get_types_from_select(&sql_query, &all_tables).map_err(|err_msg| {
-                    syn::Error::new(sql_lit.span(), format!("Return Type Error: {}", err_msg))
-                })?;
-
-            let binding_types = get_type_of_binding_parameters(&sql_query, &all_tables)
-                .map_err(|err| format_binding_error(err, &sql_query, sql_lit.span()))?;
-
-            let param_names = generate_unique_param_names(&binding_types);
-
-            if !select_types.is_empty() {
-                let cardinality = detect_query_cardinality(&sql_query, &all_tables);
-                let (structs, methods) = read::generate_read_methods(
-                    sql_lit.span(),
-                    struct_name,
-                    &ident,
-                    &field_attrs,
-                    &doc_comment,
-                    &binding_types,
-                    &param_names,
-                    &select_types,
-                    cardinality,
-                )?;
-                generated_structs.push(structs);
-                generated_methods.push(methods);
+            // 1. Extract the SQL Literal string from whichever macro matched
+            let sql_lit = if let Some(lit) = &sql_macro_opt {
+                lit
             } else {
-                generated_methods.push(write::generate_write_methods(
-                    sql_lit.span(),
-                    &ident,
-                    &field_attrs,
-                    &doc_comment,
-                    &binding_types,
-                    &param_names,
-                )?);
-            }
-        } else if let Some(runtime_input) = parse_runtime_macro(&field.ty)? {
-            let sql_lit = &runtime_input.sql;
-            let sql_query = prepare_sql_string(&sql_lit.value(), sql_lit.span())?;
+                &runtime_macro_opt.as_ref().unwrap().sql
+            };
 
+            // 2. Prepare the SQL string and push the struct assignment (Shared Logic!)
+            let sql_query = prepare_sql_string(&sql_lit.value(), sql_lit.span())?;
             field.ty = parse_quote!(sqlitex::internal_sqlite::sqlitex_statement::SqlitexStmt);
             push_sql_assignment(&ident, &sql_query, sql_lit.span(), &mut sql_assignments);
 
-            let doc_comment = format!(" \n**SQL**\n```sql\n{}", format_sql(&sql_lit.value()));
+            // 3. Create the CodegenContext exactly ONCE!
+            let ctx = CodegenContext {
+                struct_name,
+                ident: &ident,
+                field_attrs: &field_attrs,
+                doc_comment: format!(" \n**SQL**\n```sql\n{}", format_sql(&sql_query)),
+                sql_span: sql_lit.span(),
+            };
 
-            generated_methods.push(runtime::generate_runtime_method(
-                &ident,
-                &field_attrs,
-                &doc_comment,
-                &runtime_input,
-            ));
+            // 4. Branch off into specific logic
+            if let Some(runtime_input) = runtime_macro_opt {
+                // --- sql_escape_hatch! ---
+                generated_methods.push(runtime::generate_runtime_method(
+                    &ctx,
+                    &runtime_input,
+                ));
+            } else {
+                // --- sql! ---
+                validate_no_virtual_tables(&sql_query)
+                    .map_err(|msg| syn::Error::new(sql_lit.span(), msg))?;
+                validate_cast_types(&sql_query)
+                    .map_err(|msg| syn::Error::new(sql_lit.span(), msg))?;
+                validate_create_table_types(&sql_query)
+                    .map_err(|msg| syn::Error::new(sql_lit.span(), msg))?;
+
+                if let Err(err_msg) = validate_single_statement(&sql_query) {
+                    return Err(syn::Error::new(sql_lit.span(), err_msg));
+                }
+                if let Err(err_msg) = validate_sql_syntax_with_sqlite(&all_tables, &sql_query) {
+                    return Err(syn::Error::new(sql_lit.span(), err_msg.to_string()));
+                }
+                if let Err(err_msg) = validate_insert_strict(&sql_query, &all_tables) {
+                    return Err(syn::Error::new(sql_lit.span(), err_msg.to_string()));
+                }
+
+                if is_create_table(&sql_query) {
+                    create_tables(&sql_query, &mut all_tables);
+                    generated_methods.push(create_table::generate_create_table(&ctx));
+                    continue;
+                }
+
+                let select_types =
+                    get_types_from_select(&sql_query, &all_tables).map_err(|err_msg| {
+                        syn::Error::new(sql_lit.span(), format!("Return Type Error: {}", err_msg))
+                    })?;
+
+                let binding_types = get_type_of_binding_parameters(&sql_query, &all_tables)
+                    .map_err(|err| format_binding_error(err, &sql_query, sql_lit.span()))?;
+
+                let param_names = generate_unique_param_names(&binding_types);
+
+                if !select_types.is_empty() {
+                    let cardinality = detect_query_cardinality(&sql_query, &all_tables);
+                    let (structs, methods) = read::generate_read_methods(
+                        &ctx,
+                        &binding_types,
+                        &param_names,
+                        &select_types,
+                        cardinality,
+                    )?;
+                    generated_structs.push(structs);
+                    generated_methods.push(methods);
+                } else {
+                    generated_methods.push(write::generate_write_methods(
+                        &ctx,
+                        &binding_types,
+                        &param_names,
+                    )?);
+                }
+            }
         } else {
+            // --- Standard Struct Field (e.g. conn: Arc<Connection>) ---
             let ty = &field.ty;
             standard_params.push(quote! { #ident: #ty });
             standard_assignments.push(quote! { #ident });
         }
     }
-
+    
     fields.named.push(parse_quote! { __db: std::sync::Arc<sqlitex::internal_sqlite::sqlitex_connection::Connection> });
 
     let (impl_generics, ty_generics, where_clause) = item_struct.generics.split_for_impl();

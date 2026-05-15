@@ -1,88 +1,39 @@
-use proc_macro2::{Span, TokenStream};
+use proc_macro2::TokenStream;
 use quote::quote;
 use sqlitex_type_inference::{binding_patterns::BindingParam, expr::BaseType};
+use crate::codegen::context::CodegenContext;
 
 pub fn generate_write_methods(
-    sql_span: Span,
-    ident: &syn::Ident,
-    field_attrs: &[syn::Attribute],
-    doc_comment: &str,
+    ctx: &CodegenContext,
     binding_types: &[BindingParam],
     param_names: &[String],
 ) -> syn::Result<TokenStream> {
     let mut generated_methods = quote! {};
+    let ident = ctx.ident;
+    let field_attrs = ctx.field_attrs;
+    let doc_comment = &ctx.doc_comment;
+
+    let prepare_block = ctx.generate_prepare_block();
 
     if binding_types.is_empty() {
         generated_methods.extend(quote! {
             #(#field_attrs)*
             #[doc = #doc_comment]
             pub fn #ident(&mut self) -> Result<(), sqlitex::errors::SqlWriteError> {
-                if self.#ident.stmt.is_null() {
-                    unsafe {
-                        sqlitex::utility::utils::prepare_stmt(
-                            self.__db.db,
-                            &mut self.#ident.stmt,
-                            self.#ident.sql_query
-                        )?;
-                    }
-                }
-                let mut preparred_statement = sqlitex::internal_sqlite::preparred_statement::PreparredStmt {
-                    stmt: self.#ident.stmt,
-                    conn: self.__db.db,
-                };
+                #prepare_block
                 preparred_statement.step()?;
                 Ok(())
             }
         });
     } else {
-        let mut method_args = Vec::new();
-        let mut bind_calls = Vec::new();
-
-        for (i, bind_param) in binding_types.iter().enumerate() {
-            let arg_name = quote::format_ident!("{}", param_names[i]);
-            let bind_type = &bind_param.data_type;
-            let bind_index = (i + 1) as i32;
-
-            let rust_base_type = match bind_type.base_type {
-                BaseType::Integer => quote! { i64 },
-                BaseType::Real => quote! { f64 },
-                BaseType::Bool => quote! { bool },
-                BaseType::Text => quote! { &str },
-                BaseType::Blob => quote! { &[u8] },
-                _ => return Err(syn::Error::new(sql_span, "Unable to infer type for `?`. Consider casting with `::` or `CAST AS`")),
-            };
-
-            let final_type = if bind_type.nullable {
-                quote! { Option<#rust_base_type> }
-            } else {
-                quote! { #rust_base_type }
-            };
-
-            method_args.push(quote! { #arg_name: #final_type });
-            bind_calls.push(quote! {
-                preparred_statement.bind_parameter(#bind_index, #arg_name)?;
-            });
-        }
+        // Call unified Bindings Logic
+        let (method_args, bind_calls) = ctx.generate_bindings(binding_types, param_names)?;
 
         generated_methods.extend(quote! {
             #(#field_attrs)*
             #[doc = #doc_comment]
-            pub fn #ident(&mut self, #(#method_args),*) -> Result<(), sqlitex::errors::SqlWriteBindingError> {
-                if self.#ident.stmt.is_null() {
-                    unsafe {
-                        sqlitex::utility::utils::prepare_stmt(
-                            self.__db.db,
-                            &mut self.#ident.stmt,
-                            self.#ident.sql_query
-                        )?;
-                    }
-                }
-
-                let mut preparred_statement = sqlitex::internal_sqlite::preparred_statement::PreparredStmt {
-                    stmt: self.#ident.stmt,
-                    conn: self.__db.db,
-                };
-
+            pub fn #ident(&mut self #(, #method_args)*) -> Result<(), sqlitex::errors::SqlWriteBindingError> {
+                #prepare_block
                 #(#bind_calls)*
                 preparred_statement.step()?;
                 Ok(())
@@ -104,7 +55,7 @@ pub fn generate_write_methods(
                 BaseType::Bool => quote! { bool },
                 BaseType::Text => quote! { String },
                 BaseType::Blob => quote! { Vec<u8> },
-                _ => return Err(syn::Error::new(sql_span, "Unable to infer type for `?`. Consider casting with `::` or `CAST AS`")),
+                _ => return Err(syn::Error::new(ctx.sql_span, "Unable to infer type for `?`. Consider casting with `::` or `CAST AS`")),
             };
 
             let owned_final_type = if bind_type.nullable {
@@ -126,7 +77,9 @@ pub fn generate_write_methods(
                     BaseType::Blob => quote! { item.#tuple_idx.as_slice() },
                     _ => quote! { item.#tuple_idx },
                 }
-            };many_bind_calls.push(quote! {
+            };
+
+            many_bind_calls.push(quote! {
                 if let Err(__e) = preparred_statement.bind_parameter(#bind_index, #bind_expr) {
                     if is_outermost {
                         let _ = self.__db.execute_batch("ROLLBACK");

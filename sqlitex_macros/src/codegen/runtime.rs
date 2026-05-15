@@ -1,16 +1,20 @@
 use proc_macro2::TokenStream;
 use quote::quote;
 use crate::parse::RuntimeSqlInput;
+use crate::codegen::context::CodegenContext;
 
 pub fn generate_runtime_method(
-    ident: &syn::Ident,
-    field_attrs: &[syn::Attribute],
-    doc_comment: &str,
+    ctx: &CodegenContext,
     runtime_input: &RuntimeSqlInput,
 ) -> TokenStream {
     let mut generated_methods = quote! {};
     let mut method_args = Vec::new();
     let mut bind_calls = Vec::new();
+
+    let ident = ctx.ident;
+    let field_attrs = ctx.field_attrs;
+    let doc_comment = &ctx.doc_comment;
+    let prepare_block = ctx.generate_prepare_block();
 
     for (i, arg_type) in runtime_input.args.iter().enumerate() {
         let arg_name = quote::format_ident!("arg_{}", i);
@@ -48,21 +52,7 @@ pub fn generate_runtime_method(
             #(#field_attrs)*
             #[doc = #doc_comment]
             pub fn #ident(&mut self #(, #method_args)*) -> Result<sqlitex::internal_sqlite::rows_dao::Rows<'_, #mapper_type>, sqlitex::errors::SqlReadErrorBindings> {
-                if self.#ident.stmt.is_null() {
-                    unsafe {
-                        sqlitex::utility::utils::prepare_stmt(
-                            self.__db.db,
-                            &mut self.#ident.stmt,
-                            self.#ident.sql_query
-                        )?;
-                    }
-                }
-
-                let mut preparred_statement = sqlitex::internal_sqlite::preparred_statement::PreparredStmt {
-                    stmt: self.#ident.stmt,
-                    conn: self.__db.db,
-                };
-
+                #prepare_block
                 #(#bind_calls)*
 
                 Ok(preparred_statement.query(#mapper_type))
@@ -73,21 +63,7 @@ pub fn generate_runtime_method(
             #(#field_attrs)*
             #[doc = #doc_comment]
             pub fn #ident(&mut self #(, #method_args)*) -> Result<(), sqlitex::errors::SqlWriteBindingError> {
-                if self.#ident.stmt.is_null() {
-                    unsafe {
-                        sqlitex::utility::utils::prepare_stmt(
-                            self.__db.db,
-                            &mut self.#ident.stmt,
-                            self.#ident.sql_query
-                        )?;
-                    }
-                }
-
-                let mut preparred_statement = sqlitex::internal_sqlite::preparred_statement::PreparredStmt {
-                    stmt: self.#ident.stmt,
-                    conn: self.__db.db,
-                };
-
+                #prepare_block
                 #(#bind_calls)*
 
                 preparred_statement.step()?;
