@@ -2,7 +2,7 @@ use std::{collections::HashMap, env, path::Path};
 
 use proc_macro::TokenStream;
 use quote::quote;
-use sqlitex_core::utility::utils::{get_db_schema, validate_sql_syntax_with_sqlite};
+use sqlitex_core::utility::utils::validate_sql_syntax_with_sqlite;
 use sqlitex_type_inference::validate_create_table_types;
 use sqlitex_type_inference::{
     QueryCardinality, binding_patterns::get_type_of_binding_parameters, detect_query_cardinality,
@@ -11,7 +11,7 @@ use sqlitex_type_inference::{
     validate_insert_strict, validate_no_virtual_tables, validate_single_statement,
 };
 use syn::{
-    Data, DeriveInput, Fields, Ident, ItemStruct, parse_macro_input, parse_quote, spanned::Spanned,
+    ItemStruct, parse_macro_input, parse_quote, spanned::Spanned,
 };
 mod parse;
 mod schema_source;
