@@ -574,6 +574,7 @@ pub fn detect_query_cardinality(
         GroupByExpr::Expressions(exprs, _) => !exprs.is_empty(),
         GroupByExpr::All(_) => true,
     };
+    let has_having = select.having.is_some();
 
     // Aggregates without GROUP BY are ExactlyOne ONLY IF there is no LIMIT clause.
     if !has_group_by && query.limit_clause.is_none() {
@@ -595,7 +596,13 @@ pub fn detect_query_cardinality(
             });
 
         if all_are_aggregates {
-            return QueryCardinality::ExactlyOne;
+            if has_having {
+                // It might return 1 row, or 0 rows if it gets filtered out.
+                return QueryCardinality::ZeroOrOne;
+            } else {
+                // Without HAVING, it unconditionally returns exactly 1 row.
+                return QueryCardinality::ExactlyOne;
+            }
         }
     }
 
