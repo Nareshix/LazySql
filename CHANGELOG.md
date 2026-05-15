@@ -2,6 +2,13 @@
 
 **follows `yyyy-mm-dd` format**
 
+## [0.4.3] - 2026-05-15
+
+## Bug fixes
+- strings with null bytes will be captured and not cut off
+- Fix name collision for generated structs. 
+- Wrap the preparred stmt in RAII to prevent potential memory leaks when creating migration table
+
 ## [0.4.2] - 2026-05-15
 
 ### Perf
@@ -30,6 +37,9 @@ updated docs on migration
   - **Single column queries** now return primitive types (e.g., `i64`, `String`) instead of structs:
     - _Old:_ `let count = db.count_users()?.first()?.unwrap().col_0;`
     - _New:_ `let count: i64 = db.count_users()?;`
+
+### Bug fixes
+- strings with null bytes will be captured and not cut off #68
 
 
 
