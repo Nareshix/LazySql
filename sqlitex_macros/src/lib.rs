@@ -3,70 +3,21 @@ use std::{collections::HashMap, env, path::Path};
 use proc_macro::TokenStream;
 use quote::quote;
 use sqlitex_core::utility::utils::{get_db_schema, validate_sql_syntax_with_sqlite};
+use sqlitex_type_inference::validate_create_table_types;
 use sqlitex_type_inference::{
     QueryCardinality, binding_patterns::get_type_of_binding_parameters, detect_query_cardinality,
     expr::BaseType, is_create_table, pg_cast_syntax_to_sqlite, rewrite_bool_columns,
     select_patterns::get_types_from_select, table::create_tables, validate_cast_types,
-    validate_create_table_types, validate_insert_strict, validate_no_virtual_tables,
-    validate_single_statement,
+    validate_insert_strict, validate_no_virtual_tables, validate_single_statement,
 };
 use syn::{
-    Data, DeriveInput, Fields, Ident, ItemStruct, LitStr, Type, parse_macro_input, parse_quote,
-    spanned::Spanned,
+    Data, DeriveInput, Fields, Ident, ItemStruct, parse_macro_input, parse_quote, spanned::Spanned,
 };
 
+mod parse;
 mod utils;
-use utils::fnv1a_hash;
-use utils::format_sql;
-
-struct RuntimeSqlInput {
-    return_type: Option<Type>,
-    sql: syn::LitStr,
-    args: Vec<Type>,
-}
-
-impl syn::parse::Parse for RuntimeSqlInput {
-    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        let return_type;
-        let sql;
-
-        if input.peek(syn::LitStr) {
-            // sql_escape_hatch!("UPDATE...", arg, arg)
-            return_type = None;
-            sql = input.parse()?;
-        } else {
-            //  sql_escape_hatch!(UserDTO, "SELECT...", arg, arg)
-            return_type = Some(input.parse()?);
-            input.parse::<syn::Token![,]>()?; // Eat comma
-            sql = input.parse()?;
-        }
-
-        let mut args = Vec::new();
-        while !input.is_empty() {
-            input.parse::<syn::Token![,]>()?; // Eat comma
-            if input.is_empty() {
-                break;
-            }
-            args.push(input.parse()?);
-        }
-
-        Ok(RuntimeSqlInput {
-            return_type,
-            sql,
-            args,
-        })
-    }
-}
-
-fn parse_runtime_macro(ty: &syn::Type) -> syn::Result<Option<RuntimeSqlInput>> {
-    if let syn::Type::Macro(type_macro) = ty
-        && type_macro.mac.path.is_ident("sql_escape_hatch")
-    {
-        let parsed: RuntimeSqlInput = syn::parse2(type_macro.mac.tokens.clone())?;
-        return Ok(Some(parsed));
-    }
-    Ok(None)
-}
+use parse::*;
+use utils::*;
 
 #[proc_macro_attribute]
 pub fn sqlitex(args: TokenStream, input: TokenStream) -> TokenStream {
@@ -1631,23 +1582,6 @@ db.transaction(|tx| {
                 },
         watcher_tokens,
     ))
-}
-
-fn parse_sql_macro_type(ty: &Type) -> syn::Result<Option<LitStr>> {
-    if let Type::Macro(type_macro) = ty
-        && type_macro.mac.path.is_ident("sql")
-    {
-        let lit = syn::parse2(type_macro.mac.tokens.clone()).map_err(|_| {
-            syn::Error::new(
-                type_macro.mac.tokens.span(),
-                "sql!(...) must contain a string",
-            )
-        })?;
-
-        return Ok(Some(lit));
-    }
-
-    Ok(None)
 }
 
 #[proc_macro_derive(SqlMapping)]
