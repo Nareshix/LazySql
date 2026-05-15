@@ -6,8 +6,11 @@
 
 ## Bug fixes
 - strings with null bytes will be captured and not cut off
-- Fix name collision for generated structs. 
+- Fix name collision for generated structs.
 - Wrap the preparred stmt in RAII to prevent potential memory leaks when creating migration table
+- alias now gives Option<T>
+- prevent variable shadow bug
+- HAVING now returns one or zero
 
 ## [0.4.2] - 2026-05-15
 
