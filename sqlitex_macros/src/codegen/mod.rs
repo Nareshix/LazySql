@@ -174,11 +174,11 @@ pub(crate) fn expand(
             const _: () = {
                 impl #impl_generics #struct_name #ty_generics #where_clause {
                     pub fn new(
-                        db: impl Into<std::sync::Arc<sqlitex::internal_sqlite::sqlitex_connection::Connection>>,
+                        __db_conn: impl Into<std::sync::Arc<sqlitex::internal_sqlite::sqlitex_connection::Connection>>,
                         #(#standard_params),*
                     ) -> Self {
                         Self {
-                            __db: db.into(),
+                            __db: __db_conn.into(),
                             #(#standard_assignments,)*
                             #(#sql_assignments,)*
                         }
