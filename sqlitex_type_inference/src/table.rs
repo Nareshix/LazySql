@@ -86,14 +86,36 @@ pub fn create_tables(sql: &str, tables: &mut HashMap<String, Vec<ColumnInfo>>) {
             name,
             columns,
             without_rowid,
+            constraints,
             ..
         }) = statement
         {
-            let table_name = name
-                .0
-                .last()
-                .map(normalize_part)
-                .unwrap_or(name.to_string());
+            let table_name = name.0.last().map(normalize_part).unwrap_or(name.to_string());
+
+            let mut table_unique_cols = std::collections::HashSet::new();
+
+            for constraint in constraints {
+                match constraint {
+                    sqlparser::ast::TableConstraint::Unique { columns, .. }
+                    | sqlparser::ast::TableConstraint::PrimaryKey { columns, .. } => {
+                        for col in columns {
+                            // FIX: Unpack the identifier from the OrderByExpr wrapper!
+                            match &col.column.expr {
+                                sqlparser::ast::Expr::Identifier(ident) => {
+                                    table_unique_cols.insert(normalize_identifier(ident));
+                                }
+                                sqlparser::ast::Expr::CompoundIdentifier(idents) => {
+                                    if let Some(ident) = idents.last() {
+                                        table_unique_cols.insert(normalize_identifier(ident));
+                                    }
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
 
             let table_columns = columns
                 .iter()
@@ -102,42 +124,28 @@ pub fn create_tables(sql: &str, tables: &mut HashMap<String, Vec<ColumnInfo>>) {
                     let mut is_detected_boolean = false;
                     let mut is_default = false;
                     let mut is_unique = false;
-                    // check if type is strictly INTEGER (not INT)
-                    let is_strictly_integer =
-                        col.data_type.to_string().eq_ignore_ascii_case("INTEGER");
+                    let is_strictly_integer = col.data_type.to_string().eq_ignore_ascii_case("INTEGER");
 
                     for option_def in &col.options {
                         match &option_def.option {
-                            ColumnOption::Check(expr) if is_boolean_constraint(expr) => {
-                                is_detected_boolean = true;
-                            }
-                            ColumnOption::NotNull => {
-                                nullable = false;
-                            }
-                            ColumnOption::Unique {
-                                is_primary: true, ..
-                            }
-                            // "INTEGER PRIMARY KEY" is an alias for ROWID (auto-increment)
-                            // UNLESS the table is declared WITHOUT ROWID.
-                            if is_strictly_integer && !without_rowid => {
+                            ColumnOption::Check(expr) if is_boolean_constraint(expr) => is_detected_boolean = true,
+                            ColumnOption::NotNull => nullable = false,
+                            ColumnOption::Unique { is_primary: true, .. } if is_strictly_integer && !without_rowid => {
                                 is_default = true;
                                 is_unique = true;
                             }
-                            ColumnOption::Unique { .. } => {
-                                is_unique = true;
-                            }
-
+                            ColumnOption::Unique { .. } => is_unique = true,
                             ColumnOption::Default(_) => is_default = true,
-                            // Check for explicit AUTOINCREMENT token
-                            ColumnOption::DialectSpecific(tokens)
-                                if tokens
-                                    .iter()
-                                    .any(|t| t.to_string().to_uppercase() == "AUTOINCREMENT") =>
-                            {
+                            ColumnOption::DialectSpecific(tokens) if tokens.iter().any(|t| t.to_string().to_uppercase() == "AUTOINCREMENT") => {
                                 is_default = true;
                             }
                             _ => {}
                         }
+                    }
+
+                    // Apply the table-level constraints we extracted earlier
+                    if table_unique_cols.contains(&normalize_identifier(&col.name)) {
+                        is_unique = true;
                     }
 
                     let base_type = if is_detected_boolean {
@@ -148,11 +156,7 @@ pub fn create_tables(sql: &str, tables: &mut HashMap<String, Vec<ColumnInfo>>) {
 
                     ColumnInfo {
                         name: normalize_identifier(&col.name),
-                        data_type: Type {
-                            base_type,
-                            nullable,
-                            contains_placeholder: false,
-                        },
+                        data_type: Type { base_type, nullable, contains_placeholder: false },
                         has_default: is_default,
                         is_unique,
                     }
