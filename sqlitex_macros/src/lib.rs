@@ -13,12 +13,12 @@ use sqlitex_type_inference::{
 use syn::{
     Data, DeriveInput, Fields, Ident, ItemStruct, parse_macro_input, parse_quote, spanned::Spanned,
 };
-
 mod parse;
+mod schema_source;
+mod sql_mapping;
 mod utils;
 use parse::*;
 use utils::*;
-
 #[proc_macro_attribute]
 pub fn sqlitex(args: TokenStream, input: TokenStream) -> TokenStream {
     let path_lit_opt = if args.is_empty() {
@@ -300,76 +300,12 @@ fn expand(
                             }
                         };
         } else {
-            watcher_tokens = quote! { const _: &[u8] = include_bytes!(#db_path); };
+            let result = schema_source::process_file_source(path, &db_path)?;
+            schema_init_method = result.schema_init_method;
+            open_connected_db_method = result.open_connected_db_method;
+            watcher_tokens = result.watcher_tokens;
+            all_tables = result.all_tables;
 
-            if db_path.ends_with(".sql") {
-                let content = std::fs::read_to_string(&db_path).map_err(|e| {
-                    syn::Error::new(path.span(), format!("Failed to read {}: {}", db_path, e))
-                })?;
-
-                validate_cast_types(&content).map_err(|msg| {
-                    syn::Error::new(path.span(), format!("In {}: {}", db_path, msg))
-                })?;
-
-                validate_create_table_types(&content).map_err(|msg| {
-                    syn::Error::new(path.span(), format!("In {}: {}", db_path, msg))
-                })?;
-
-                sqlitex_type_inference::validate_sql_file_syntax(&content).map_err(|msg| {
-                    syn::Error::new(path.span(), format!("In {}: {}", db_path, msg))
-                })?;
-
-                let filename = std::path::Path::new(&db_path)
-                    .file_name()
-                    .and_then(|f| f.to_str())
-                    .unwrap_or(&db_path);
-
-                let doc_msg = format!(
-                    "Executes all SQL statements defined in the external `{}` file",
-                    filename
-                );
-
-                schema_init_method = quote! {
-                    #[doc = #doc_msg]
-                    pub fn init(&self) -> Result<(), sqlitex::errors::SqliteFailure> {
-                        self.__db.execute_batch(include_str!(#path))
-                    }
-                };
-            }
-
-            let is_db_file = db_path.ends_with(".db")
-                || db_path.ends_with(".sqlite")
-                || db_path.ends_with(".sqlite3")
-                || db_path.ends_with(".db3")
-                || db_path.ends_with(".s3db")
-                || db_path.ends_with(".sl3");
-
-            if is_db_file {
-                let file_name = std::path::Path::new(&db_path)
-                    .file_name()
-                    .and_then(|f| f.to_str())
-                    .unwrap_or(&db_path);
-
-                let doc_msg = format!("Opens a connection to `{}`", file_name);
-
-                open_connected_db_method = quote! {
-                    #[doc = #doc_msg]
-                    pub fn open_connected_db() -> Result<Self, sqlitex::errors::connection::SqliteOpenErrors> {
-                        let conn = sqlitex::internal_sqlite::sqlitex_connection::Connection::open(#path)?;
-                        Ok(Self::new(conn))
-                    }
-                };
-            }
-
-            let schemas = get_db_schema(&db_path).map_err(|err| {
-                syn::Error::new(path.span(), format!("Failed to load DB schema: {}", err))
-            })?;
-            for schema in schemas {
-                validate_create_table_types(&schema).map_err(|msg| {
-                    syn::Error::new(path.span(), format!("In {}: {}", db_path, msg))
-                })?;
-                create_tables(&schema, &mut all_tables);
-            }
         }
     }
     let struct_name = &item_struct.ident;
