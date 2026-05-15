@@ -39,7 +39,6 @@ pub fn generate_read_methods(
     let mapper_struct_name = quote::format_ident!("{}{}_", struct_name, pascal_name);
     let scalar_mapper_name = quote::format_ident!("{}_{}_scalar_", struct_name, ident);
 
-    // Call unified Bindings Logic
     let (method_args, bind_calls) = ctx.generate_bindings(binding_types, param_names)?;
 
     let single_col_rust_type = if is_single_col {

@@ -12,8 +12,6 @@ pub struct CodegenContext<'a> {
 }
 
 impl<'a> CodegenContext<'a> {
-    /// Generates the standard boilerplate for preparing statements
-    /// If you ever want to add logging/telemetry, do it here!
     pub fn generate_prepare_block(&self) -> TokenStream {
         let ident = self.ident;
         quote! {

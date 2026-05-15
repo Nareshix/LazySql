@@ -66,7 +66,7 @@ pub(crate) fn expand(
     let mut generated_methods = Vec::new();
     let mut generated_structs = Vec::new();
 
-for field in fields.named.iter_mut() {
+    for field in fields.named.iter_mut() {
         let ident = field.ident.clone().unwrap();
         let field_attrs = field.attrs.clone();
 
@@ -77,20 +77,16 @@ for field in fields.named.iter_mut() {
 
         // If the field is EITHER `sql!` OR `sql_escape_hatch!`
         if sql_macro_opt.is_some() || runtime_macro_opt.is_some() {
-
-            // 1. Extract the SQL Literal string from whichever macro matched
             let sql_lit = if let Some(lit) = &sql_macro_opt {
                 lit
             } else {
                 &runtime_macro_opt.as_ref().unwrap().sql
             };
 
-            // 2. Prepare the SQL string and push the struct assignment (Shared Logic!)
             let sql_query = prepare_sql_string(&sql_lit.value(), sql_lit.span())?;
             field.ty = parse_quote!(sqlitex::internal_sqlite::sqlitex_statement::SqlitexStmt);
             push_sql_assignment(&ident, &sql_query, sql_lit.span(), &mut sql_assignments);
 
-            // 3. Create the CodegenContext exactly ONCE!
             let ctx = CodegenContext {
                 struct_name,
                 ident: &ident,
@@ -99,15 +95,11 @@ for field in fields.named.iter_mut() {
                 sql_span: sql_lit.span(),
             };
 
-            // 4. Branch off into specific logic
             if let Some(runtime_input) = runtime_macro_opt {
-                // --- sql_escape_hatch! ---
-                generated_methods.push(runtime::generate_runtime_method(
-                    &ctx,
-                    &runtime_input,
-                ));
+                //  sql_escape_hatch!
+                generated_methods.push(runtime::generate_runtime_method(&ctx, &runtime_input));
             } else {
-                // --- sql! ---
+                //  sql!
                 validate_no_virtual_tables(&sql_query)
                     .map_err(|msg| syn::Error::new(sql_lit.span(), msg))?;
                 validate_cast_types(&sql_query)
@@ -161,13 +153,12 @@ for field in fields.named.iter_mut() {
                 }
             }
         } else {
-            // --- Standard Struct Field (e.g. conn: Arc<Connection>) ---
             let ty = &field.ty;
             standard_params.push(quote! { #ident: #ty });
             standard_assignments.push(quote! { #ident });
         }
     }
-    
+
     fields.named.push(parse_quote! { __db: std::sync::Arc<sqlitex::internal_sqlite::sqlitex_connection::Connection> });
 
     let (impl_generics, ty_generics, where_clause) = item_struct.generics.split_for_impl();
